@@ -143,11 +143,19 @@ function get_attribute(io_var::Tuple{Variable,AdiosFile}, attribute_name)
 end
 
 function get_io_variable(file::AdiosFile, variable_name::AbstractString)
-    return (inquire_variable(file.io, variable_name), file)
+    variable = inquire_variable(file.io, variable_name)
+    if variable === nothing
+        error("Variable '$variable_name' not found in file.")
+    end
+    return (variable, file)
 end
 function get_io_variable(group::Tuple{AdiosFile,String}, variable_name::AbstractString)
     file, group_name = group
-    return (inquire_variable(file.io, group_name * "/" * variable_name), file)
+    variable = inquire_variable(file.io, group_name * "/" * variable_name)
+    if variable === nothing
+        error("Variable '$variable_name' not found in group '$group_name' in file.")
+    end
+    return (variable, file)
 end
 
 function get_group(file::AdiosFile, group_name::AbstractString)
@@ -230,7 +238,7 @@ function write_single_value!(file::AdiosFile, variable_name,
                 add_variable_attribute!(file, variable_name, "units", units)
             end
         else
-            io_var = inquire_variable(file.io, variable_name)
+            io_var = get_io_variable(file, variable_name)
         end
         if global_rank[] == 0
             put!(file.engine, io_var, data)
@@ -250,7 +258,7 @@ function write_single_value!(file::AdiosFile, variable_name,
     local_ranges = Tuple(isa(c, mk_int) ? (1:c) : isa(c, coordinate) ? c.local_io_range : c.n for c ∈ coords)
     global_ranges = Tuple(isa(c, mk_int) ? (1:c) : isa(c, coordinate) ? c.global_io_range : c.n for c ∈ coords)
     if overwrite && variable_name ∈ keys(file_or_group)
-        io_var = inquire_variable(file.io, variable_name)
+        io_var = get_io_variable(file, variable_name)
     else
         # Final `true` argument ('constant_dims') indicates that the dimensions passed
         # here never change.
@@ -450,10 +458,10 @@ function load_slice(group::Tuple{AdiosFile,String}, variable_name::AbstractStrin
     return load_slice(file, group_name * "/" * variable_name, slices_or_indices...)
 end
 function load_slice(file::AdiosFile, variable_name::AbstractString, slices_or_indices...)
-    return load_slice((variable_name, file), slices_or_indices...)
+    variable = get_io_variable(file, variable_name)
+    return load_slice(variable, slices_or_indices...)
 end
-function load_slice(io_variable::Union{Tuple{<:AbstractString,AdiosFile},Tuple{Variable,AdiosFile}},
-                    slices_or_indices...)
+function load_slice(io_variable::Tuple{Variable,AdiosFile}, slices_or_indices...)
 
     variable, file = io_variable
     var_size = size(io_variable)
