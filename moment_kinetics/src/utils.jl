@@ -167,7 +167,7 @@ Append a number to the filename, to get a new, non-existing filename to backup t
 to.
 """
 function get_backup_filename(filename)
-    if !isfile(filename)
+    if !ispath(filename)
         throw(MKFileNotFound("Requested to restart from $filename, but this file does not exist"))
     end
     counter = 1
