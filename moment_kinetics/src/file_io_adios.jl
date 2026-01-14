@@ -429,6 +429,10 @@ function load_variable(group::Tuple{AdiosFile,String}, variable_name::AbstractSt
     return load_variable(file, group_name * "/" * variable_name)
 end
 function load_variable(file::AdiosFile, variable_name::AbstractString)
+    if occursin("provenance_tracking", variable_name)
+        @warn "ADIOS2.jl string loading is broken at the moment. Returning dummy string as temporary workaround."
+        return "No loaded string - temporary workaround for issues loading strings with ADIOS.jl"
+    end
     var = adios_load(file, variable_name)
     if isa(var, AbstractArray{UInt8,0}) && size(var) == ()
         return var[] == UInt8(true)
