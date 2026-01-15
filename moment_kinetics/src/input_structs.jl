@@ -20,7 +20,7 @@ export set_defaults_and_check_top_level!, set_defaults_and_check_section!,
        convert_to_sorted_nested_OptionsDict
 
 using ..moment_kinetics_structs: coordinate
-using ..type_definitions: mk_float, mk_int, OptionsDict, MPISharedArray
+using ..type_definitions
 
 using DataStructures: SortedDict
 using MPI
@@ -143,6 +143,7 @@ struct advance_info
     vpa_advection::Bool
     vperp_advection::Bool
     z_advection::Bool
+    alpha_advection::Bool
     r_advection::Bool
     neutral_z_advection::Bool
     neutral_r_advection::Bool
@@ -889,7 +890,7 @@ function set_defaults_and_check_top_level!(options::OptionsDict, warn_unexpected
                 println("Unexpected option '$key=$value' in top-level options")
                 pop!(options, key)
             else
-                error("Unexpected option '$key=$value' in top-level options")
+                throw(MKOptionError("Unexpected option '$key=$value' in top-level options"))
             end
         end
     end

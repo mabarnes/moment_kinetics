@@ -392,7 +392,7 @@ Note that Gauss-Legendre spectral the element method implemented here
 does not use upwinding within an element.
 """
 # Spectral element method does not use upwinding within an element
-function elementwise_derivative!(coord, ff, adv_fac, spectral::gausslegendre_info)
+function elementwise_derivative!(coord, ff, speed, spectral::gausslegendre_info)
     return elementwise_derivative!(coord, ff, spectral)
 end
 

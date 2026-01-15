@@ -1355,7 +1355,7 @@ function update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometr
     if z.irank == 0
         @loop_s_r is ir begin
             @views moments.ion.chodura_integral_lower[ir,is] = update_chodura_integral_species!(ff[:,:,1,ir,is],dffdr[:,:,1,ir,is],
-            ff_dummy[:,:],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[1,:,:,ir],moments.ion.dens[1,ir,is],del_vpa,1,ir)
+            ff_dummy[:,:],vpa,vperp,z,r,composition,geometry,z_advect[:,:,1,ir,is],moments.ion.dens[1,ir,is],del_vpa,1,ir)
         end
     else # we do not save this Chodura integral to the output file
         @loop_s_r is ir begin
@@ -1365,7 +1365,7 @@ function update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometr
     if z.irank == z.nrank - 1
         @loop_s_r is ir begin
             @views moments.ion.chodura_integral_upper[ir,is] = update_chodura_integral_species!(ff[:,:,end,ir,is],dffdr[:,:,end,ir,is],
-            ff_dummy[:,:],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[end,:,:,ir],moments.ion.dens[end,ir,is],del_vpa,z.n,ir)
+            ff_dummy[:,:],vpa,vperp,z,r,composition,geometry,z_advect[:,:,end,ir,is],moments.ion.dens[end,ir,is],del_vpa,z.n,ir)
         end
     else # we do not save this Chodura integral to the output file
         @loop_s_r is ir begin
@@ -1502,7 +1502,7 @@ Pre-calculate spatial derivatives of the moments that will be needed for the tim
     if moments.evolve_density
         # Upwinded with z-advection velocity, to be used in continuity equation
         @loop_s_r_z is ir iz begin
-            dummy_zrs[iz,ir,is] = -(vEz[iz,ir] + bz[iz,ir] * upar[iz,ir,is])
+            dummy_zrs[iz,ir,is] = (vEz[iz,ir] + bz[iz,ir] * upar[iz,ir,is])
         end
         @views derivative_z!(moments.ion.ddens_dz_upwind, density, dummy_zrs, buffer_r_1,
                              buffer_r_2, buffer_r_3, buffer_r_4, buffer_r_5, buffer_r_6,
@@ -1514,7 +1514,7 @@ Pre-calculate spatial derivatives of the moments that will be needed for the tim
         if !moments.evolve_density
             # If evolving density this was already calculated
             @loop_s_r_z is ir iz begin
-                dummy_zrs[iz,ir,is] = -(vEz[iz,ir] + bz[iz,ir] * upar[iz,ir,is])
+                dummy_zrs[iz,ir,is] = (vEz[iz,ir] + bz[iz,ir] * upar[iz,ir,is])
             end
         end
         @views derivative_z!(moments.ion.dupar_dz_upwind, upar, dummy_zrs, buffer_r_1,
@@ -1526,7 +1526,7 @@ Pre-calculate spatial derivatives of the moments that will be needed for the tim
         if !(moments.evolve_density || moments.evolve_upar)
             # If evolving density or upar this was already calculated
             @loop_s_r_z is ir iz begin
-                dummy_zrs[iz,ir,is] = -(vEz[iz,ir] + bz[iz,ir] * upar[iz,ir,is])
+                dummy_zrs[iz,ir,is] = (vEz[iz,ir] + bz[iz,ir] * upar[iz,ir,is])
             end
         end
         @views derivative_z!(moments.ion.dp_dz_upwind, p, dummy_zrs, buffer_r_1,
@@ -1544,7 +1544,7 @@ Pre-calculate spatial derivatives of the moments that will be needed for the tim
                                  buffer_z_3, buffer_z_4, r_spectral, r)
             # Upwinded with r-advection velocity, to be used in continuity equation
             @loop_s_r_z is ir iz begin
-                dummy_zrs[iz,ir,is] = -vEr[iz,ir]
+                dummy_zrs[iz,ir,is] = vEr[iz,ir]
             end
             @views derivative_r!(moments.ion.ddens_dr_upwind, density,
                                  dummy_zrs, buffer_z_1, buffer_z_2, buffer_z_3, buffer_z_4,
@@ -1558,7 +1558,7 @@ Pre-calculate spatial derivatives of the moments that will be needed for the tim
             if !moments.evolve_density
                 # If evolving density this was already calculated
                 @loop_s_r_z is ir iz begin
-                    dummy_zrs[iz,ir,is] = -vEr[iz,ir]
+                    dummy_zrs[iz,ir,is] = vEr[iz,ir]
                 end
             end
             @views derivative_r!(moments.ion.dupar_dr_upwind, upar, dummy_zrs, buffer_z_1,
@@ -1572,7 +1572,7 @@ Pre-calculate spatial derivatives of the moments that will be needed for the tim
             if !(moments.evolve_density || moments.evolve_upar)
                 # If evolving density or upar this was already calculated
                 @loop_s_r_z is ir iz begin
-                    dummy_zrs[iz,ir,is] = -vEr[iz,ir]
+                    dummy_zrs[iz,ir,is] = vEr[iz,ir]
                 end
             end
             @views derivative_r!(moments.ion.dp_dr_upwind, p, dummy_zrs, buffer_z_1,
@@ -2415,11 +2415,8 @@ advance
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z;
                              neutrals=true)
         # Upwinded using upar as advection velocity, to be used in continuity equation
-        @loop_sn_r_z isn ir iz begin
-            dummy_zrsn[iz,ir,isn] = -uz[iz,ir,isn]
-        end
         @views derivative_z!(moments.neutral.ddens_dz_upwind, density,
-                             dummy_zrsn, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
+                             uz, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
                              buffer_r_5, buffer_r_6, z_spectral, z; neutrals=true)
     end
     if moments.evolve_density && neutral_mom_diss_coeff > 0.0
@@ -2436,10 +2433,7 @@ advance
     if moments.evolve_upar
         # Upwinded using upar as advection velocity, to be used in force-balance
         # equation
-        @loop_sn_r_z isn ir iz begin
-            dummy_zrsn[iz,ir,isn] = -uz[iz,ir,isn]
-        end
-        @views derivative_z!(moments.neutral.duz_dz_upwind, uz, dummy_zrsn,
+        @views derivative_z!(moments.neutral.duz_dz_upwind, uz, uz,
                              buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
                              buffer_r_5, buffer_r_6, z_spectral, z; neutrals=true)
     end
@@ -2456,10 +2450,7 @@ advance
         @views derivative_z!(moments.neutral.dp_dz, p, buffer_r_1, buffer_r_2, buffer_r_3,
                              buffer_r_4, z_spectral, z; neutrals=true)
         # Upwinded using upar as advection velocity, to be used in energy equation
-        @loop_sn_r_z isn ir iz begin
-            dummy_zrsn[iz,ir,isn] = -uz[iz,ir,isn]
-        end
-        @views derivative_z!(moments.neutral.dp_dz_upwind, p, dummy_zrsn,
+        @views derivative_z!(moments.neutral.dp_dz_upwind, p, uz,
                              buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
                              buffer_r_5, buffer_r_6, z_spectral, z; neutrals=true)
 

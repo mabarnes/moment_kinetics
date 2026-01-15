@@ -26,23 +26,40 @@ using SparseArrays
 """
 """
 @timeit global_timer vpa_advection!(
-                         f_out, fvec_in, fields, moments, vpa_advect, r_advect, z_advect,
-                         vpa, vperp, z, r, dt, t, vpa_spectral, composition, collisions,
-                         ion_source_settings, geometry) = begin
+                         f_out, fvec_in, fields, moments, vpa_advect, r_advect,
+                         alpha_advect, z_advect, vpa, vperp, z, r, dt, t, vpa_spectral,
+                         composition, collisions, ion_source_settings, geometry) = begin
+    return vpa_advection!(f_out, fvec_in, fields, moments, vpa_advect, r_advect,
+                          alpha_advect, z_advect, vpa, vperp, z, r, dt, t, vpa_spectral,
+                          composition, collisions, ion_source_settings, geometry,
+                          Val(moments.evolve_density), Val(moments.evolve_upar),
+                          Val(moments.evolve_p))
+end
+function vpa_advection!(f_out, fvec_in, fields, moments, vpa_advect, r_advect,
+                        alpha_advect, z_advect, vpa, vperp, z, r, dt, t, vpa_spectral,
+                        composition, collisions, ion_source_settings, geometry,
+                        evolve_density::Val, evolve_upar::Val, evolve_p::Val)
 
     @begin_s_r_z_vperp_region()
 
     # only have a parallel acceleration term for neutrals if using the peculiar velocity
     # wpar = vpar - upar as a variable; i.e., d(wpar)/dt /=0 for neutrals even though d(vpar)/dt = 0.
 
-    # calculate the advection speed corresponding to current f
-    update_speed_vpa!(vpa_advect, fields, fvec_in, moments, r_advect, z_advect, vpa,
-                      vperp, z, r, composition, collisions, ion_source_settings, t,
-                      geometry)
-    @loop_s is begin
-        @loop_r_z_vperp ir iz ivperp begin
-            @views advance_f_local!(f_out[:,ivperp,iz,ir,is], fvec_in.pdf[:,ivperp,iz,ir,is],
-                                    vpa_advect[is], ivperp, iz, ir, vpa, dt, vpa_spectral)
+    speed_args = get_speed_vpa_inner_args(vpa_advect, fvec_in, moments, fields, r_advect,
+                                          alpha_advect, z_advect, geometry, vperp, vpa,
+                                          evolve_density, evolve_upar, evolve_p)
+    @loop_s_r is ir begin
+        speed_args_sr = get_speed_vpa_inner_views_sr(is, ir, speed_args...)
+        @loop_z iz begin
+            speed_args_z = get_speed_vpa_inner_views_z(iz, speed_args_sr...)
+            @loop_vperp ivperp begin
+                speed_args_vperp = get_speed_vpa_inner_views_vperp(ivperp, speed_args_z...)
+                # calculate the advection speed corresponding to current f
+                update_speed_vpa_inner!(speed_args_vperp...)
+                @views advance_f_local!(f_out[:,ivperp,iz,ir,is],
+                                        fvec_in.pdf[:,ivperp,iz,ir,is],
+                                        first(speed_args_vperp), vpa, dt, vpa_spectral)
+            end
         end
     end
 end
@@ -50,19 +67,19 @@ end
 """
 """
 @timeit global_timer implicit_vpa_advection!(
-                         f_out, fvec_in, fields, moments, r_advect, z_advect, vpa_advect,
-                         vpa, vperp, z, r, dt, t, r_spectral, z_spectral, vpa_spectral,
-                         composition, collisions, ion_source_settings, geometry,
-                         nl_solver_params, vpa_diffusion, num_diss_params, gyroavs,
-                         scratch_dummy) = begin
+                         f_out, fvec_in, fields, moments, r_advect, alpha_advect,
+                         z_advect, vpa_advect, vpa, vperp, z, r, dt, t, r_spectral,
+                         z_spectral, vpa_spectral, composition, collisions,
+                         ion_source_settings, geometry, nl_solver_params, vpa_diffusion,
+                         num_diss_params, gyroavs, scratch_dummy) = begin
     if vperp.n > 1 && (moments.evolve_density || moments.evolve_upar || moments.evolve_p)
         error("Moment constraints in implicit_vpa_advection!() do not support 2V runs yet")
     end
 
     # calculate the advection speed corresponding to current f
-    update_speed_vpa!(vpa_advect, fields, fvec_in, moments, r_advect, z_advect, vpa,
-                      vperp, z, r, composition, collisions, ion_source_settings, t,
-                      geometry)
+    update_speed_vpa!(vpa_advect, fields, fvec_in, moments, r_advect, alpha_advect,
+                      z_advect, vpa, vperp, z, r, composition, collisions,
+                      ion_source_settings, t, geometry)
 
     # Ensure moments are consistent with f_new
     new_scratch = scratch_pdf(f_out, fvec_in.density, fvec_in.upar, fvec_in.ppar,
@@ -86,7 +103,7 @@ end
         @loop_r_z_vperp ir iz ivperp begin
             f_old_no_bc = @view fvec_in.pdf[:,ivperp,iz,ir,is]
             this_f_out = @view f_out[:,ivperp,iz,ir,is]
-            speed = @view vpa_advect[is].speed[:,ivperp,iz,ir]
+            speed = @view vpa_advect[:,ivperp,iz,ir,is]
 
             if z.irank == 0 && iz == 1
                 @. vpa.scratch = vpagrid_to_vpa(vpa.grid, moments.ion.vth[iz,ir,is],
@@ -271,8 +288,8 @@ end
             function residual_func!(residual, f_new; krylov=false)
                 apply_bc!(f_new)
                 residual .= f_old
-                advance_f_local!(residual, f_new, vpa_advect[is], ivperp, iz, ir, vpa, dt,
-                                 vpa_spectral)
+                @views advance_f_local!(residual, f_new, vpa_advect[ivperp,iz,ir,is], vpa,
+                                        dt, vpa_spectral)
 
                 if vpa_diffusion
                     second_derivative!(vpa.scratch, f_new, vpa, vpa_spectral)
@@ -322,35 +339,108 @@ end
 """
 calculate the advection speed in the vpa-direction at each grid point
 """
-function update_speed_vpa!(vpa_advect, fields, fvec, moments, r_advect, z_advect, vpa,
-                           vperp, z, r, composition, collisions, ion_source_settings, t,
-                           geometry)
-    @debug_consistency_checks r.n == size(vpa_advect[1].speed,4) || throw(BoundsError(vpa_advect))
-    @debug_consistency_checks z.n == size(vpa_advect[1].speed,3) || throw(BoundsError(vpa_advect))
-    @debug_consistency_checks vperp.n == size(vpa_advect[1].speed,2) || throw(BoundsError(vpa_advect))
-    #@debug_consistency_checks composition.n_ion_species == size(vpa_advect,2) || throw(BoundsError(vpa_advect))
-    @debug_consistency_checks composition.n_ion_species == size(vpa_advect,1) || throw(BoundsError(vpa_advect))
-    @debug_consistency_checks vpa.n == size(vpa_advect[1].speed,1) || throw(BoundsError(speed))
+function update_speed_vpa!(vpa_advect, fields, fvec, moments, r_advect, alpha_advect,
+                           z_advect, vpa, vperp, z, r, composition, collisions,
+                           ion_source_settings, t, geometry)
+    return update_speed_vpa!(vpa_advect, fields, fvec, moments, r_advect, alpha_advect,
+                             z_advect, vpa, vperp, z, r, composition, collisions,
+                             ion_source_settings, t, geometry,
+                             Val(moments.evolve_density), Val(moments.evolve_upar),
+                             Val(moments.evolve_p))
+end
+function update_speed_vpa!(vpa_advect, fields, fvec, moments, r_advect, alpha_advect,
+                           z_advect, vpa, vperp, z, r, composition, collisions,
+                           ion_source_settings, t, geometry, evolve_density::Val,
+                           evolve_upar::Val, evolve_p::Val)
+    @debug_consistency_checks r.n == size(vpa_advect,4) || throw(BoundsError(vpa_advect))
+    @debug_consistency_checks z.n == size(vpa_advect,3) || throw(BoundsError(vpa_advect))
+    @debug_consistency_checks vperp.n == size(vpa_advect,2) || throw(BoundsError(vpa_advect))
+    @debug_consistency_checks composition.n_ion_species == size(vpa_advect,5) || throw(BoundsError(vpa_advect))
+    @debug_consistency_checks vpa.n == size(vpa_advect,1) || throw(BoundsError(vpa_advect))
+
+    @begin_s_r_z_vperp_region()
 
     # dvpa/dt = Ze/m ⋅ E_parallel - (vperp^2/2B) bz dB/dz
-    if moments.evolve_p
-        update_speed_vpa_n_u_p_evolution!(vpa_advect, fields, fvec, moments, r_advect,
-                                          z_advect, vpa, vperp, z, r, composition, collisions,
-                                          ion_source_settings, geometry)
-    elseif moments.evolve_upar
-        update_speed_vpa_n_u_evolution!(vpa_advect, fields, fvec, moments, r_advect,
-                                        z_advect, vpa, vperp, z, r, composition, collisions,
-                                        ion_source_settings, geometry)
-    elseif moments.evolve_density
-        update_speed_vpa_n_evolution!(vpa_advect, fields, fvec, moments, vpa, vperp, z, r,
-                                      composition, collisions, ion_source_settings,
-                                      geometry)
-    else
-        update_speed_vpa_DK!(vpa_advect, fields, fvec, moments, vpa, vperp, z, r,
-                             composition, collisions, ion_source_settings, geometry)
+    # magnetic mirror term only supported for standard DK implementation
+    speed_args = get_speed_vpa_inner_args(vpa_advect, fvec, moments, fields, r_advect,
+                                          alpha_advect, z_advect, geometry, vperp, vpa,
+                                          evolve_density, evolve_upar, evolve_p)
+    @loop_s_r is ir begin
+        speed_args_sr = get_speed_vpa_inner_views_sr(is, ir, speed_args...)
+        @loop_z iz begin
+            speed_args_z = get_speed_vpa_inner_views_z(iz, speed_args_sr...)
+            @loop_vperp ivperp begin
+                update_speed_vpa_inner!(get_speed_vpa_inner_views_vperp(ivperp, speed_args_z...)...)
+            end
+        end
     end
 
     return nothing
+end
+
+@inline function get_speed_vpa_inner_args(vpa_advect, fvec, moments, fields, r_advect,
+                                          alpha_advect, z_advect, geometry, vperp, vpa,
+                                          evolve_density::Val, evolve_upar::Val,
+                                          evolve_p::Val)
+    if evolve_p === Val(true)
+        return vpa_advect, moments.ion.vth, fields.gEz, geometry.bzed, geometry.Bmag,
+               geometry.dBdz, moments.ion.dupar_dt, moments.ion.dupar_dr,
+               moments.ion.dupar_dz, moments.ion.dvth_dt, moments.ion.dvth_dr,
+               moments.ion.dvth_dz, r_advect, alpha_advect, z_advect, vperp.grid,
+               vpa.grid, evolve_density, evolve_upar, evolve_p
+    elseif evolve_upar === Val(true)
+        return vpa_advect, fields.gEz, geometry.bzed, geometry.Bmag, geometry.dBdz,
+               moments.ion.dupar_dt, moments.ion.dupar_dr, moments.ion.dupar_dz,
+               r_advect, alpha_advect, z_advect, vperp.grid, evolve_density, evolve_upar,
+               evolve_p
+    elseif evolve_density === Val(true)
+        return vpa_advect, fields.gEz, geometry.bzed, geometry.Bmag, geometry.dBdz,
+               vperp.grid, evolve_density, evolve_upar, evolve_p
+    else
+        return vpa_advect, fields.gEz, geometry.bzed, geometry.dBdz, geometry.Bmag,
+               vperp.grid, evolve_density, evolve_upar, evolve_p
+    end
+end
+
+@inline function get_speed_vpa_inner_views_sr(is, ir, vpa_advect, vth, gEz, bzed, Bmag,
+                                              dBdz, dupar_dt, dupar_dr, dupar_dz,
+                                              dvth_dt, dvth_dr, dvth_dz, r_advect,
+                                              alpha_advect, z_advect, wperp, wpa,
+                                              evolve_density::Val{true},
+                                              evolve_upar::Val{true}, evolve_p::Val{true})
+    return @views vpa_advect[:,:,:,ir,is], vth[:,ir,is], gEz[:,:,ir,is], bzed[:,ir],
+                  Bmag[:,ir], dBdz[:,ir], dupar_dt[:,ir,is], dupar_dr[:,ir,is],
+                  dupar_dz[:,ir,is], dvth_dt[:,ir,is], dvth_dr[:,ir,is],
+                  dvth_dz[:,ir,is], r_advect[:,:,:,ir,is], alpha_advect[:,:,:,ir,is],
+                  z_advect[:,:,:,ir,is], wperp, wpa, evolve_density, evolve_upar,
+                  evolve_p
+end
+
+@inline function get_speed_vpa_inner_views_z(iz, vpa_advect, vth, gEz, bzed, Bmag, dBdz,
+                                             dupar_dt, dupar_dr, dupar_dz, dvth_dt,
+                                             dvth_dr, dvth_dz, r_advect, alpha_advect,
+                                             z_advect, wperp, wpa,
+                                             evolve_density::Val{true},
+                                             evolve_upar::Val{true}, evolve_p::Val{true})
+    return @views vpa_advect[:,:,iz], vth[iz], gEz[:,iz], bzed[iz], Bmag[iz], dBdz[iz],
+                  dupar_dt[iz], dupar_dr[iz], dupar_dz[iz], dvth_dt[iz], dvth_dr[iz],
+                  dvth_dz[iz], r_advect[:,:,iz], alpha_advect[:,:,iz], z_advect[:,:,iz],
+                  wperp, wpa, evolve_density, evolve_upar, evolve_p
+end
+
+@inline function get_speed_vpa_inner_views_vperp(ivperp, vpa_advect, vth, gEz, bzed,
+                                                 Bmag, dBdz, dupar_dt, dupar_dr,
+                                                 dupar_dz, dvth_dt, dvth_dr, dvth_dz,
+                                                 r_advect, alpha_advect, z_advect, wperp,
+                                                 wpa, evolve_density::Val{true},
+                                                 evolve_upar::Val{true},
+                                                 evolve_p::Val{true})
+    this_wperp = wperp[ivperp]
+    mu = 0.5 * this_wperp^2 * vth^2 / Bmag
+    return @views vpa_advect[:,ivperp], vth, gEz[ivperp], bzed, dBdz, dupar_dt, dupar_dr,
+                  dupar_dz, dvth_dt, dvth_dr, dvth_dz, r_advect[:,ivperp],
+                  alpha_advect[:,ivperp], z_advect[:,ivperp], mu, wpa, evolve_density,
+                  evolve_upar, evolve_p
 end
 
 """
@@ -359,45 +449,56 @@ where density, flow and pressure are evolved independently from the pdf;
 in this case, the parallel velocity coordinate is the normalized peculiar velocity
 wpa = (vpa - upar)/vth
 """
-function update_speed_vpa_n_u_p_evolution!(vpa_advect, fields, fvec, moments, r_advect,
-                                           z_advect, vpa, vperp, z, r, composition, collisions,
-                                           ion_source_settings, geometry)
-    vth = moments.ion.vth
-    bzed = geometry.bzed
-    dBdz = geometry.dBdz
-    Bmag = geometry.Bmag
-    dupar_dr = moments.ion.dupar_dr
-    dupar_dz = moments.ion.dupar_dz
-    dvth_dr = moments.ion.dvth_dr
-    dvth_dz = moments.ion.dvth_dz
-    dupar_dt = moments.ion.dupar_dt
-    dvth_dt = moments.ion.dvth_dt
-    wpa = vpa.grid
-    wperp = vperp.grid
-    gEz = fields.gEz
-    @loop_s is begin
-        speed = vpa_advect[is].speed
-        r_speed = r_advect[is].speed
-        z_speed = z_advect[is].speed
-        @loop_r ir begin
-            # update parallel acceleration to account for:
-            @loop_z_vperp_vpa iz ivperp ivpa begin
-                mu = 0.5*(wperp[ivperp]^2 * vth[iz,ir,is]^2)/Bmag[iz,ir]
-                speed[ivpa,ivperp,iz,ir] =
-                    (bzed[iz,ir] * gEz[ivperp,iz,ir,is]
-                     - (dupar_dt[iz,ir,is]
-                        + r_speed[ir,ivpa,ivperp,iz] * dupar_dr[iz,ir,is]
-                        + z_speed[iz,ivpa,ivperp,ir] * dupar_dz[iz,ir,is])
-                     - wpa[ivpa] * (dvth_dt[iz,ir,is]
-                                    + r_speed[ir,ivpa,ivperp,iz] * dvth_dr[iz,ir,is]
-                                    + z_speed[iz,ivpa,ivperp,ir] * dvth_dz[iz,ir,is])
-                     - (mu*bzed[iz,ir]*dBdz[iz,ir])
-                    ) / vth[iz,ir,is]
-            end
-        end
-    end
+function update_speed_vpa_inner!(vpa_advect, vth, gEz, bzed, dBdz, dupar_dt, dupar_dr,
+                                 dupar_dz, dvth_dt, dvth_dr, dvth_dz, r_advect,
+                                 alpha_advect, z_advect, mu, wpa,
+                                 evolve_density::Val{true}, evolve_upar::Val{true},
+                                 evolve_p::Val{true})
+
+    @. vpa_advect =
+           (bzed * gEz
+            - (dupar_dt + r_advect * dupar_dr + (alpha_advect + z_advect) * dupar_dz)
+            - wpa * (dvth_dt + r_advect * dvth_dr + (alpha_advect + z_advect) * dvth_dz)
+            - (mu * bzed * dBdz)
+           ) / vth
 
     return nothing
+end
+
+@inline function get_speed_vpa_inner_views_sr(is, ir, vpa_advect, gEz, bzed, Bmag, dBdz,
+                                              dupar_dt, dupar_dr, dupar_dz, r_advect,
+                                              alpha_advect, z_advect, vperp,
+                                              evolve_density::Val{true},
+                                              evolve_upar::Val{true},
+                                              evolve_p::Val{false})
+    return @views vpa_advect[:,:,:,ir,is], gEz[:,:,ir,is], bzed[:,ir], Bmag[:,ir],
+                  dBdz[:,ir], dupar_dt[:,ir,is], dupar_dr[:,ir,is], dupar_dz[:,ir,is],
+                  r_advect[:,:,:,ir,is], alpha_advect[:,:,:,ir,is],
+                  z_advect[:,:,:,ir,is], vperp, evolve_density, evolve_upar, evolve_p
+end
+
+@inline function get_speed_vpa_inner_views_z(iz, vpa_advect, gEz, bzed, Bmag, dBdz,
+                                             dupar_dt, dupar_dr, dupar_dz, r_advect,
+                                             alpha_advect, z_advect, vperp,
+                                             evolve_density::Val{true},
+                                             evolve_upar::Val{true},
+                                             evolve_p::Val{false})
+    return @views vpa_advect[:,:,iz], gEz[:,iz], bzed[iz], Bmag[iz], dBdz[iz],
+                  dupar_dt[iz], dupar_dr[iz], dupar_dz[iz], r_advect[:,:,iz],
+                  alpha_advect[:,:,iz], z_advect[:,:,iz], vperp, evolve_density,
+                  evolve_upar, evolve_p
+end
+
+@inline function get_speed_vpa_inner_views_vperp(ivperp, vpa_advect, gEz, bzed, Bmag,
+                                                 dBdz, dupar_dt, dupar_dr, dupar_dz,
+                                                 r_advect, alpha_advect, z_advect, vperp,
+                                                 evolve_density::Val{true},
+                                                 evolve_upar::Val{true},
+                                                 evolve_p::Val{false})
+    mu = 0.5 * vperp[ivperp]^2 / Bmag
+    return @views vpa_advect[:,ivperp], gEz[ivperp], bzed, dBdz, dupar_dt, dupar_dr,
+                  dupar_dz, r_advect[:,ivperp], alpha_advect[:,ivperp],
+                  z_advect[:,ivperp], mu, evolve_density, evolve_upar, evolve_p
 end
 
 """
@@ -406,37 +507,42 @@ where density and flow are evolved independently from the pdf;
 in this case, the parallel velocity coordinate is the peculiar velocity
 wpa = vpa-upar
 """
-function update_speed_vpa_n_u_evolution!(vpa_advect, fields, fvec, moments, r_advect,
-                                         z_advect, vpa, vperp, z, r, composition, collisions,
-                                         ion_source_settings, geometry)
-    bzed = geometry.bzed
-    dBdz = geometry.dBdz
-    Bmag = geometry.Bmag
-    gEz = fields.gEz
-    dupar_dr = moments.ion.dupar_dr
-    dupar_dz = moments.ion.dupar_dz
-    dupar_dt = moments.ion.dupar_dt
-    wpa = vpa.grid
-    @loop_s is begin
-        speed = vpa_advect[is].speed
-        r_speed = r_advect[is].speed
-        z_speed = z_advect[is].speed
-        @loop_r ir begin
-            # update parallel acceleration to account for:
-            @loop_z_vperp_vpa iz ivperp ivpa begin
-                mu = 0.5*(vperp.grid[ivperp]^2)/Bmag[iz,ir]
-                speed[ivpa,ivperp,iz,ir] =
-                    (bzed[iz,ir] * gEz[ivperp,iz,ir,is]
-                     - (dupar_dt[iz,ir,is]
-                        + r_speed[ir,ivpa,ivperp,iz] * dupar_dr[iz,ir,is]
-                        + z_speed[iz,ivpa,ivperp,ir] * dupar_dz[iz,ir,is])
-                     - (mu*bzed[iz,ir]*dBdz[iz,ir])
-                    )
-            end
-        end
-    end
+function update_speed_vpa_inner!(vpa_advect, gEz, bzed, dBdz, dupar_dt, dupar_dr,
+                                 dupar_dz, r_advect, alpha_advect, z_advect, mu,
+                                 evolve_density::Val{true}, evolve_upar::Val{true},
+                                 evolve_p::Val{false})
+    @. vpa_advect =
+           (bzed * gEz
+            - (dupar_dt + r_advect * dupar_dr + (alpha_advect + z_advect) * dupar_dz)
+            - (mu * bzed * dBdz)
+           )
 
     return nothing
+end
+
+@inline function get_speed_vpa_inner_views_sr(is, ir, vpa_advect, gEz, bzed, Bmag, dBdz,
+                                              vperp, evolve_density::Val{true},
+                                              evolve_upar::Val{false},
+                                              evolve_p::Val{false})
+    return @views vpa_advect[:,:,:,ir,is], gEz[:,:,ir,is], bzed[:,ir], Bmag[:,ir],
+                  dBdz[:,ir], vperp, evolve_density, evolve_upar, evolve_p
+end
+
+@inline function get_speed_vpa_inner_views_z(iz, vpa_advect, gEz, bzed, Bmag, dBdz,
+                                             vperp, evolve_density::Val{true},
+                                             evolve_upar::Val{false},
+                                             evolve_p::Val{false})
+    return @views vpa_advect[:,:,iz], gEz[:,iz], bzed[iz], Bmag[iz], dBdz[iz], vperp,
+                  evolve_density, evolve_upar, evolve_p
+end
+
+@inline function get_speed_vpa_inner_views_vperp(ivperp, vpa_advect, gEz, bzed, Bmag,
+                                                 dBdz, vperp, evolve_density::Val{true},
+                                                 evolve_upar::Val{false},
+                                                 evolve_p::Val{false})
+    mu = 0.5 * vperp[ivperp]^2 / Bmag
+    return @views vpa_advect[:,ivperp], gEz[ivperp], bzed, dBdz, mu, evolve_density,
+                  evolve_upar, evolve_p
 end
 
 """
@@ -444,41 +550,48 @@ update the advection speed in the parallel velocity coordinate for the case
 where density is evolved independently from the pdf;
 in this case, the parallel velocity coordinate is unchanged.
 """
-function update_speed_vpa_n_evolution!(vpa_advect, fields, fvec, moments, vpa, vperp, z, r,
-                                       composition, collisions, ion_source_settings,
-                                       geometry)
-    bzed = geometry.bzed
-    dBdz = geometry.dBdz
-    Bmag = geometry.Bmag
-    gEz = fields.gEz
-    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-        mu = 0.5*(vperp.grid[ivperp]^2)/Bmag[iz,ir]
-        vpa_advect[is].speed[ivpa,ivperp,iz,ir] = (bzed[iz,ir]*gEz[ivperp,iz,ir,is] -
-                                                mu*bzed[iz,ir]*dBdz[iz,ir])
-    end
+function update_speed_vpa_inner!(vpa_advect, gEz, bzed, dBdz, mu,
+                                 evolve_density::Val{true}, evolve_upar::Val{false},
+                                 evolve_p::Val{false})
+    @. vpa_advect = bzed * gEz - mu * bzed * dBdz
 
     return nothing
+end
+
+@inline function get_speed_vpa_inner_views_sr(is, ir, vpa_advect, gEz, bzed, dBdz, Bmag,
+                                              vperp, evolve_density::Val{false},
+                                              evolve_upar::Val{false},
+                                              evolve_p::Val{false})
+    return @views vpa_advect[:,:,:,ir,is], gEz[:,:,ir,is], bzed[:,ir], dBdz[:,ir],
+                  Bmag[:,ir], vperp, evolve_density, evolve_upar, evolve_p
+end
+
+@inline function get_speed_vpa_inner_views_z(iz, vpa_advect, gEz, bzed, dBdz, Bmag, vperp,
+                                             evolve_density::Val{false},
+                                             evolve_upar::Val{false},
+                                             evolve_p::Val{false})
+    return @views vpa_advect[:,:,iz], gEz[:,iz], bzed[iz], dBdz[iz], Bmag[iz], vperp,
+                  evolve_density, evolve_upar, evolve_p
+end
+
+@inline function get_speed_vpa_inner_views_vperp(ivperp, vpa_advect, gEz, bzed, dBdz,
+                                                 Bmag, vperp, evolve_density::Val{false},
+                                                 evolve_upar::Val{false},
+                                                 evolve_p::Val{false})
+    # mu, the adiabatic invariant
+    mu = 0.5 * vperp[ivperp]^2 / Bmag
+    return @views vpa_advect[:,ivperp], gEz[ivperp], bzed, dBdz, mu, evolve_density,
+                  evolve_upar, evolve_p
 end
 
 """
 update the advection speed in the parallel velocity coordinate for the case
 where no moments are evolved independently from the pdf. vpa is unchanged.
 """
-function update_speed_vpa_DK!(vpa_advect, fields, fvec, moments, vpa, vperp, z, r,
-                                     composition, collisions, ion_source_settings, geometry)
-    bzed = geometry.bzed
-    dBdz = geometry.dBdz
-    Bmag = geometry.Bmag
-    gEz = fields.gEz
-    @inbounds @fastmath begin
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-            # mu, the adiabatic invariant
-            mu = 0.5*(vperp.grid[ivperp]^2)/Bmag[iz,ir]
-            # bzed = B_z/B
-            vpa_advect[is].speed[ivpa,ivperp,iz,ir] = (bzed[iz,ir]*gEz[ivperp,iz,ir,is] -
-                                                    mu*bzed[iz,ir]*dBdz[iz,ir])
-        end
-    end
+function update_speed_vpa_inner!(vpa_advect, gEz, bzed, dBdz, mu,
+                                 evolve_density::Val{false}, evolve_upar::Val{false},
+                                 evolve_p::Val{false})
+    @. vpa_advect = bzed * gEz - mu * bzed * dBdz
     return nothing
 end
 

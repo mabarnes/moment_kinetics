@@ -386,13 +386,13 @@ function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info)
 end
 
 """
-    elementwise_derivative!(coord, ff, adv_fac, spectral::chebyshev_info)
+    elementwise_derivative!(coord, ff, speed, spectral::chebyshev_info)
 
 Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'.
 
 Note: Chebyshev derivative does not make use of upwinding information within each element.
 """
-function elementwise_derivative!(coord, ff, adv_fac, spectral::chebyshev_info)
+function elementwise_derivative!(coord, ff, speed, spectral::chebyshev_info)
     return elementwise_derivative!(coord, ff, spectral)
 end
 

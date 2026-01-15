@@ -61,6 +61,7 @@ include("fokker_planck.jl")
 include("advection.jl")
 include("vpa_advection.jl")
 include("z_advection.jl")
+include("alpha_advection.jl")
 include("r_advection.jl")
 include("vperp_advection.jl")
 include("electron_z_advection.jl")
@@ -155,15 +156,11 @@ function run_moment_kinetics(input_dict::OptionsDict; restart=false, restart_tim
         # last 3 elements of mk_state are ascii_io, io_moments, and io_dfns
         cleanup_moment_kinetics!(mk_state[end-2:end]...)
     catch e
-        if isa(e, MKFileNotFound)
-            # This error should always be thrown on all process, so no need to call
+        if isa(e, MKCollectiveError)
+            # These errors should always be thrown on all process, so no need to call
             # MPI.Abort()
             cleanup_moment_kinetics!(mk_state[end-2:end]...)
-            rethrow(e)
-        end
-        if isa(e, MKFileNotFound) || global_size[] == 1
-            # MKFileNotFound should always be thrown on all process, so no need to call
-            # MPI.Abort().
+        elseif global_size[] == 1
             # Error almost certainly occured before cleanup. If running in serial we can
             # still finalise file I/O
             cleanup_moment_kinetics!(mk_state[end-2:end]...)
