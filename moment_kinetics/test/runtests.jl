@@ -2,8 +2,8 @@ module MomentKineticsTests
 
 include("setup.jl")
 
-function runtests()
-    @testset "moment_kinetics tests" verbose=use_verbose begin
+function runtests(return_testset=false)
+    t = @testset "moment_kinetics tests" verbose=use_verbose begin
         include(joinpath(@__DIR__, "calculus_tests.jl"))
         include(joinpath(@__DIR__, "interpolation_tests.jl"))
         include(joinpath(@__DIR__, "loop_setup_tests.jl"))
@@ -28,6 +28,11 @@ function runtests()
         include(joinpath(@__DIR__, "gyroaverage_tests.jl"))
         include(joinpath(@__DIR__, "jacobian_matrix_tests.jl"))
         include(joinpath(@__DIR__, "kinetic_electron_tests.jl"))
+    end
+    if return_testset
+        return t
+    else
+        return nothing
     end
 end
 
