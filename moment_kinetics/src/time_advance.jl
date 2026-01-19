@@ -2892,9 +2892,25 @@ moments and moment derivatives
         end
     end
 
-    calculate_ion_moment_derivatives!(moments, fields, geometry, this_scratch,
-                                      scratch_dummy, r, z, r_spectral, z_spectral,
-                                      num_diss_params.ion.moment_dissipation_coefficient)
+    if composition.ion_physics == coll_krook_ions
+        # coll_krook heat flux is calculated from moments in this function via update_ion_qpar
+        update_derived_moments!(this_scratch, moments, vpa, vperp, z, r, composition,
+                                r_spectral, geometry, gyroavs, scratch_dummy,
+                                z_advect, collisions, false)
+
+        calculate_ion_moment_derivatives!(moments, fields, geometry, this_scratch,
+                                        scratch_dummy, r, z, r_spectral, z_spectral,
+                                        num_diss_params.ion.moment_dissipation_coefficient)
+
+        # This should only ever be Boltzmann for coll_krook_ions
+        update_phi!(fields, this_scratch, vperp, z, r, composition, collisions,
+                    moments, geometry, z_spectral, r_spectral, scratch_dummy, gyroavs,
+                    boundaries)
+    else
+        calculate_ion_moment_derivatives!(moments, fields, geometry, this_scratch,
+                                        scratch_dummy, r, z, r_spectral, z_spectral,
+                                        num_diss_params.ion.moment_dissipation_coefficient)
+    end
 
     if composition.electron_physics ∈ (kinetic_electrons,
                                        kinetic_electrons_with_temperature_equation)
