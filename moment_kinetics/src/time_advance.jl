@@ -35,8 +35,17 @@ using ..boundary_conditions
 using ..boundary_conditions: get_ion_z_boundary_cutoff_indices, enforce_vperp_boundary_condition!
 using ..boundary_conditions: vpagrid_to_vpa, enforce_v_boundary_condition_local!,
                              skip_f_electron_bc_points_in_Jacobian,
+                             skip_f_electron_bc_points_in_Jacobian_z_periodic,
+                             skip_f_electron_bc_points_in_Jacobian_z_periodic_serial,
+                             skip_p_electron_bc_points_in_Jacobian_z_periodic_serial,
                              skip_f_electron_bc_points_in_Jacobian_v_solve,
-                             skip_f_electron_bc_points_in_Jacobian_z_solve
+                             skip_f_electron_bc_points_in_Jacobian_v_solve_z_periodic,
+                             skip_f_electron_bc_points_in_Jacobian_v_solve_z_periodic_serial,
+                             skip_p_electron_bc_points_in_Jacobian_v_solve_z_periodic_serial,
+                             skip_f_electron_bc_points_in_Jacobian_z_solve,
+                             skip_f_electron_bc_points_in_Jacobian_z_solve_z_periodic,
+                             skip_f_electron_bc_points_in_Jacobian_z_solve_z_periodic_serial,
+                             skip_p_electron_bc_points_in_Jacobian_z_solve_z_periodic_serial
 using ..input_structs
 using ..moment_constraints: hard_force_moment_constraints!,
                             hard_force_moment_constraints_neutral!,
@@ -650,22 +659,59 @@ function get_nl_solver_params(t_params, input_dict, composition, r, z, vperp, vp
         electron_coords = (z=z, vperp=vperp, vpa=vpa)
         electron_outer_coords = (r,)
         electron_spectral = (z=z_spectral, vperp=vperp_spectral, vpa=vpa_spectral)
+        if z.periodic && z.nrank == 1 &&
+                t_params.electron_preconditioner_type ∈
+                    (Val(:electron_lu_separate_dp_dz_dq_dz), Val(:electron_lu),
+                     Val(:electron_lu_separate_third_moment),
+                     Val(:electron_lu_no_separate_moments), Val(:electron_adi))
+            # Note that periodicity can only be handled (for handle_overlaps=Val(false))
+            # when running without distributed-MPI parallelism. The points that are
+            # periodic must be in the same block so that the preconditioner matrix
+            # inversion can impose the constraint that they are equal.
+            boundary_skip_funcs = (full=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_periodic_serial,
+                                         electron_p=skip_p_electron_bc_points_in_Jacobian_z_periodic_serial,
+                                         zeroth_moment=nothing,
+                                         first_moment=nothing,
+                                         second_moment=nothing,
+                                         third_moment=nothing,
+                                         electron_dp_dz=nothing,
+                                         electron_dq_dz=nothing),
+                                   v_solve=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve_z_periodic_serial,
+                                            electron_p=skip_p_electron_bc_points_in_Jacobian_v_solve_z_periodic_serial),
+                                   z_solve=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve_z_periodic_serial,
+                                            electron_p=skip_p_electron_bc_points_in_Jacobian_z_solve_z_periodic_serial))
+        elseif z.periodic
+            boundary_skip_funcs = (full=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_periodic,
+                                         electron_p=nothing,
+                                         zeroth_moment=nothing,
+                                         first_moment=nothing,
+                                         second_moment=nothing,
+                                         third_moment=nothing,
+                                         electron_dp_dz=nothing,
+                                         electron_dq_dz=nothing),
+                                   v_solve=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve_z_periodic,
+                                            electron_p=nothing),
+                                   z_solve=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve_z_periodic,
+                                            electron_p=nothing))
+        else
+            boundary_skip_funcs = (full=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
+                                         electron_p=nothing,
+                                         zeroth_moment=nothing,
+                                         first_moment=nothing,
+                                         second_moment=nothing,
+                                         third_moment=nothing,
+                                         electron_dp_dz=nothing,
+                                         electron_dq_dz=nothing),
+                                   v_solve=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
+                                            electron_p=nothing),
+                                   z_solve=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
+                                            electron_p=nothing))
+        end
         electron_precon = get_electron_preconditioners(t_params.electron_preconditioner_type,
                                                        nl_solver_input, electron_coords,
                                                        electron_outer_coords,
                                                        electron_spectral;
-                                                       boundary_skip_funcs=(full=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
-                                                                                  electron_p=nothing,
-                                                                                  zeroth_moment=nothing,
-                                                                                  first_moment=nothing,
-                                                                                  second_moment=nothing,
-                                                                                  third_moment=nothing,
-                                                                                  electron_dp_dz=nothing,
-                                                                                  electron_dq_dz=nothing),
-                                                                            v_solve=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
-                                                                                     electron_p=nothing),
-                                                                            z_solve=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
-                                                                                     electron_p=nothing)))
+                                                       boundary_skip_funcs=boundary_skip_funcs)
         nl_solver_electron_advance_params =
             setup_nonlinear_solve(nl_solver_input, electron_coords, electron_outer_coords;
                                   anyzv_region=true, electron_p_pdf_solve=true,

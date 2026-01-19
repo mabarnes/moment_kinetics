@@ -6,7 +6,8 @@ module jacobian_matrices
 export jacobian_info, create_jacobian_info, jacobian_initialize_identity!,
        jacobian_initialize_zero!, jacobian_initialize_bc_diagonal!, get_joined_array,
        get_sparse_joined_array, get_joined_array_adi, EquationTerm, ConstantTerm,
-       CompoundTerm, NullTerm, add_term_to_Jacobian!
+       CompoundTerm, NullTerm, add_term_to_Jacobian!,
+       add_periodicity_constraint_to_jacobian!
 
 using ..array_allocation: allocate_shared_float, allocate_float
 using ..communication
@@ -205,7 +206,7 @@ function create_jacobian_info(coords::NamedTuple, spectral::NamedTuple; comm=com
         # Periodic, but this cannot be handled by the structure of BlockSkylineMatrix at
         # the moment, so revert to dense matrices.
         println("WARNING: periodic bcs not compatible with block-banded matrix "
-                * "strucutre, using dense matrix storage for Jacobian matrix.")
+                * "structure, using dense matrix storage for Jacobian matrix.")
         block_banded = false
     end
 
@@ -417,11 +418,14 @@ Initialize `jacobian.matrix` with the identity.
         for col_variable ∈ 1:n_entries
             for row_variable ∈ 1:n_entries
                 this_block = jacobian_matrix[row_variable][col_variable]
-                local_range = local_block_ranges[row_variable][col_variable]
-                this_block.data[local_range] .= 0.0
                 if col_variable == row_variable
-                    local_diagonal_inds = local_block_diagonal_inds[row_variable]
-                    this_block.data[local_diagonal_inds] .= 1.0
+                    initialize_identity_diagonal_block!(jacobian, this_block,
+                                                        jacobian.state_vector_local_ranges[row_variable],
+                                                        jacobian.state_vector_dim_sizes[row_variable],
+                                                        jacobian.state_vector_coords[row_variable])
+                else
+                    local_range = local_block_ranges[row_variable][col_variable]
+                    this_block.data[local_range] .= 0.0
                 end
             end
         end
@@ -432,10 +436,10 @@ Initialize `jacobian.matrix` with the identity.
             for row_variable ∈ 1:n_entries
                 this_block = jacobian_matrix[row_variable][col_variable]
                 if col_variable == row_variable
-                    for col ∈ col_range
-                        this_block[:,col] .= 0.0
-                        this_block[col,col] = 1.0
-                    end
+                    initialize_identity_diagonal_block!(jacobian, this_block,
+                                                        jacobian.state_vector_local_ranges[row_variable],
+                                                        jacobian.state_vector_dim_sizes[row_variable],
+                                                        jacobian.state_vector_coords[row_variable])
                 else
                     for col ∈ col_range
                         this_block[:,col] .= 0.0
@@ -453,6 +457,21 @@ Initialize `jacobian.matrix` with the identity.
                    nothing
                   )
     jacobian.synchronize(id_hash)
+    return nothing
+end
+
+function initialize_identity_diagonal_block!(jacobian, this_block,
+                                             rows_variable_local_ranges,
+                                             rows_variable_dim_sizes,
+                                             rows_variable_coords)
+    for indices_CartesianIndex ∈ CartesianIndices(rows_variable_local_ranges)
+        indices = Tuple(indices_CartesianIndex)
+        # We only put a non-zero entry on the diagonal here, and this is a diagonal block,
+        # so we can operate by columns instead of by rows for efficiency.
+        col_index = get_flattened_index(rows_variable_dim_sizes, indices)
+        this_block[:,col_index] .= 0
+        this_block[col_index,col_index] = 1.0
+    end
     return nothing
 end
 
@@ -1583,8 +1602,12 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
                     jacobian_row_block[ci] += prefactor * Dmat_slice[i] / scale
                 end
             end
+        elseif ielement == derivative_coord.nelement_local &&
+                igrid == derivative_coord.ngrid && derivative_coord.periodic
+            # In serial, periodic case, only contribution to the upper boundary rows is
+            # the periodicity constraint, so no need to do anything here.
         elseif ielement == derivative_coord.nelement_local && igrid == derivative_coord.ngrid
-            if derivative_coord.irank == derivative_coord.nrank - 1
+            if (derivative_coord.irank == derivative_coord.nrank - 1)
                 column_inds =
                     get_element_inds(jacobian, current_indices,
                                      term.current_derivative_indices,
@@ -1880,6 +1903,101 @@ function add_term_to_Jacobian!(jacobian::jacobian_info, rows_variable::Symbol,
 
             add_term_to_Jacobian_row!(jacobian, jacobian_row, rows_variable, prefactor, terms,
                                       indices, boundary_speed)
+        end
+
+        id_hash = @debug_block_synchronize_quick_ifelse(
+                       hash(string(@__FILE__, @__LINE__)),
+                       nothing
+                      )
+        jacobian.synchronize(id_hash)
+        return nothing
+    end
+end
+
+"""
+    add_periodicity_constraint_to_jacobian!(jacobian::jacobian_info)
+
+When using a preconditioner solver that does not have support for overlapping rows/columns
+(e.g. the serial LU solver), and one or more dimensions is periodic, we need to add a
+constraint to force the repeated points (that are perioidic copies of each other) to be
+equal. Apart from this function that adds the constraint, the other contributions to the
+Jacobian matrix will be identical for the rows that correspond to these repeated points.
+We can therefore leave the row corresponding to the 'lower' point unmodified, and add the
+constraint equation to the row corresponding to the 'upper' point, while leaving both RHS
+vector values unchanged. The solution is equivalent to the one that is given by the matrix
+where the 'lower' row is subtracted from the 'upper' row to leave just <constraint>=0, but
+this way minimises the number of places in the code where the `handle_overlaps=Val(false)`
+but periodic case needs to be handled specially.
+"""
+function add_periodicity_constraint_to_jacobian!(jacobian::jacobian_info)
+    @timeit global_timer "add_periodicity_constraint_to_jacobian!" begin
+        @inbounds begin
+            jacobian_matrix = jacobian.matrix
+            for rows_variable ∈ jacobian.state_vector_entries
+                rows_variable_number = jacobian.state_vector_numbers[rows_variable]
+                if jacobian.state_vector_is_constraint[rows_variable_number]
+                    # No need to add extra constraint for constraint rows.
+                    continue
+                end
+                rows_variable_dims = jacobian.state_vector_dims[rows_variable_number]
+                rows_variable_dim_sizes = jacobian.state_vector_dim_sizes[rows_variable_number]
+                rows_variable_local_ranges = jacobian.state_vector_local_ranges[rows_variable_number]
+                rows_variable_coords = jacobian.state_vector_coords[rows_variable_number]
+
+                # Only need diagonal block.
+                block = jacobian_matrix[rows_variable_number][rows_variable_number]
+
+                add_periodicity_constraint_to_jacobian!(jacobian, block,
+                                                        rows_variable_number,
+                                                        rows_variable_dims,
+                                                        rows_variable_dim_sizes,
+                                                        rows_variable_local_ranges,
+                                                        rows_variable_coords)
+            end
+        end
+    end
+
+    return nothing
+end
+
+# Internal version of the function, which ensures that rows_variable_local_ranges is a
+# Tuple so that the `CartesianIndices` call is type-stable - a Tuple is required so that
+# `CartesianIndices` knows at compile time how many indices there are. The lookup from
+# `jacobian.state_vector_local_ranges` has to happen before this function is called to
+# ensure type stability.
+function add_periodicity_constraint_to_jacobian!(jacobian::jacobian_info,
+                                                 block::AbstractMatrix{mk_float},
+                                                 rows_variable_number::mk_int,
+                                                 rows_variable_dims::Tuple,
+                                                 rows_variable_dim_sizes::Tuple,
+                                                 rows_variable_local_ranges::Tuple,
+                                                 rows_variable_coords::Tuple)
+    @inbounds begin
+        for (ic, coord) ∈ enumerate(rows_variable_coords)
+            if !coord.periodic
+                continue
+            end
+            if coord.nrank > 1
+                error("cannot handle periodicity like this with MPI-distributed "
+                      * "coordinate.")
+            end
+            n = coord.n
+            for indices_CartesianIndex ∈ CartesianIndices(rows_variable_local_ranges)
+                indices = Tuple(indices_CartesianIndex)
+
+                if indices[ic] == n
+                    this_row_index = get_flattened_index(rows_variable_dim_sizes, indices)
+                    lower_row_indices = ntuple(d -> d==ic ? 1 : indices[d], length(indices))
+                    lower_row_index = get_flattened_index(rows_variable_dim_sizes,
+                                                          lower_row_indices)
+                    # Add periodicity constraint constraint:
+                    #    x_upper - xlower = 0
+                    #    x[coord_index=n] - x[coord_index=1] = 0
+                    # Before this function is called, the corresponding matrix rows are
+                    # the identity.
+                    block[this_row_index,lower_row_index] -= 1.0
+                end
+            end
         end
 
         id_hash = @debug_block_synchronize_quick_ifelse(

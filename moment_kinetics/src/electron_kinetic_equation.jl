@@ -1329,13 +1329,33 @@ end
 
     @begin_anyzv_region()
     counter = 1
-    @loop_z_vperp_vpa iz ivperp ivpa begin
-        this_input_buffer[counter] = precon_f[ivpa,ivperp,iz]
-        counter += 1
-    end
-    @loop_z iz begin
-        this_input_buffer[counter] = precon_p[iz]
-        counter += 1
+    if z.periodic && z.nrank == 1
+        # Set RHS entries corresponding to periodicity constraint to zero.
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            if iz == z.n
+                this_input_buffer[counter] = 0.0
+            else
+                this_input_buffer[counter] = precon_f[ivpa,ivperp,iz]
+            end
+            counter += 1
+        end
+        @loop_z iz begin
+            if iz == z.n
+                this_input_buffer[counter] = 0.0
+            else
+                this_input_buffer[counter] = precon_p[iz]
+            end
+            counter += 1
+        end
+    else
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            this_input_buffer[counter] = precon_f[ivpa,ivperp,iz]
+            counter += 1
+        end
+        @loop_z iz begin
+            this_input_buffer[counter] = precon_p[iz]
+            counter += 1
+        end
     end
 
     @begin_anyzv_region()
@@ -1797,15 +1817,37 @@ end
         return nothing
     end
 
-    @begin_anyzv_z_vperp_vpa_region()
-    @loop_z_vperp_vpa iz ivperp ivpa begin
-        row = (iz - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
-        this_input_buffer[row] = precon_f[ivpa,ivperp,iz]
-    end
-    @begin_anyzv_z_region()
-    @loop_z iz begin
-        row = pdf_size + iz
-        this_input_buffer[row] = precon_p[iz]
+    if z.periodic && z.nrank == 1
+        # Set RHS entries corresponding to periodicity constraint to zero.
+        @begin_anyzv_z_vperp_vpa_region()
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            row = (iz - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
+            if iz == z.n
+                this_input_buffer[row] = 0.0
+            else
+                this_input_buffer[row] = precon_f[ivpa,ivperp,iz]
+            end
+        end
+        @begin_anyzv_z_region()
+        @loop_z iz begin
+            row = pdf_size + iz
+            if iz == z.n
+                this_input_buffer[row] = 0.0
+            else
+                this_input_buffer[row] = precon_p[iz]
+            end
+        end
+    else
+        @begin_anyzv_z_vperp_vpa_region()
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            row = (iz - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
+            this_input_buffer[row] = precon_f[ivpa,ivperp,iz]
+        end
+        @begin_anyzv_z_region()
+        @loop_z iz begin
+            row = pdf_size + iz
+            this_input_buffer[row] = precon_p[iz]
+        end
     end
     @_anyzv_subblock_synchronize()
 
@@ -5553,6 +5595,9 @@ in the time derivative term as it is for the non-boundary points.]
             jacobian, phi, f, p, vth, upar, z, vperp, vpa, vperp_spectral, vpa_spectral,
             vpa_advect, moments, num_diss_params.electron.vpa_dissipation_coefficient, me,
             ir, include)
+    end
+    if z.periodic
+        add_periodicity_constraint_to_jacobian!(jacobian)
     end
 
     add_term_to_Jacobian!(jacobian, :electron_p, dt, p_terms)

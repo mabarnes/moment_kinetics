@@ -2804,6 +2804,70 @@ function skip_f_electron_bc_points_in_Jacobian(z_speed, ivpa, ivperp, iz, vpa, v
     return false
 end
 
+"""
+    skip_f_electron_bc_points_in_Jacobian_z_periodic(z_speed, ivpa, ivperp, iz, vpa, vperp, z)
+
+This function returns `true` when the grid point specified by `iz`, `ivperp`, `ivpa` would
+be set by the boundary conditions on the electron distribution function, for the case when
+z is a periodic coordinate. When this happens, the corresponding row should be skipped
+when adding contributions to the Jacobian matrix, so that the row remains the same as a
+row of the identity matrix, so that the Jacobian matrix does not modify those points.
+Returns `false` otherwise.
+
+This function is for the periodic case.
+"""
+function skip_f_electron_bc_points_in_Jacobian_z_periodic(z_speed, ivpa, ivperp, iz, vpa, vperp, z)
+    # vperp boundary condition
+    if vperp.n > 1 && ivperp == vperp.n
+        return true
+    end
+
+    if ivpa == 1 || ivpa == vpa.n
+        return true
+    end
+
+    return false
+end
+
+"""
+    skip_f_electron_bc_points_in_Jacobian_z_periodic_serial(z_speed, ivpa, ivperp, iz, vpa, vperp, z)
+
+This function returns `true` when the grid point specified by `iz`, `ivperp`, `ivpa` would
+be set by the boundary conditions on the electron distribution function, for the case when
+z is a periodic coordinate. When this happens, the corresponding row should be skipped
+when adding contributions to the Jacobian matrix, so that the row remains the same as a
+row of the identity matrix, so that the Jacobian matrix does not modify those points.
+Returns `false` otherwise.
+
+This function is for the serial, periodic case - then the upper boundary is set by the
+periodicity constraint, so the corresponding rows should not have any Jacobian
+contributions added to them.
+"""
+function skip_f_electron_bc_points_in_Jacobian_z_periodic_serial(z_speed, ivpa, ivperp, iz, vpa, vperp, z)
+    if iz == z.n
+        return true
+    end
+
+    # vperp boundary condition
+    if vperp.n > 1 && ivperp == vperp.n
+        return true
+    end
+
+    if ivpa == 1 || ivpa == vpa.n
+        return true
+    end
+
+    return false
+end
+
+function skip_p_electron_bc_points_in_Jacobian_z_periodic_serial(z_speed, iz, z)
+    if iz == z.n
+        return true
+    end
+
+    return false
+end
+
 function skip_f_electron_bc_points_in_Jacobian_v_solve(z_speed, ivpa, ivperp, vpa, vperp)
     # z boundary condition
     # Treat as if using Dirichlet boundary condition for incoming part of the distribution
@@ -2836,6 +2900,25 @@ function skip_f_electron_bc_points_in_Jacobian_v_solve(z_speed, ivpa, ivperp, vp
     return false
 end
 
+function skip_f_electron_bc_points_in_Jacobian_v_solve_z_periodic(z_speed, ivpa, ivperp, vpa, vperp)
+    # vperp boundary condition
+    if vperp.n > 1 && ivperp == vperp.n
+        return true
+    end
+
+    if ivpa == 1 || ivpa == vpa.n
+        return true
+    end
+
+    return false
+end
+
+skip_f_electron_bc_points_in_Jacobian_v_solve_z_periodic_serial(args...) = skip_f_electron_bc_points_in_Jacobian_v_solve_z_periodic(args...)
+
+function skip_p_electron_bc_points_in_Jacobian_v_solve_z_periodic_serial(z_speed, iz, z)
+    return false
+end
+
 @inline function get_ADI_boundary_v_solve_z_speed(z_speed, z, iz)
     if iz == 1
         return (true, z_speed)
@@ -2857,6 +2940,26 @@ function skip_f_electron_bc_points_in_Jacobian_z_solve(z_speed, iz, z)
         return true
     end
     if iz == z.n && z_speed[iz] ≤ 0.0
+        return true
+    end
+
+    return false
+end
+
+function skip_f_electron_bc_points_in_Jacobian_z_solve_z_periodic(z_speed, iz, z)
+    return false
+end
+
+function skip_f_electron_bc_points_in_Jacobian_z_solve_z_periodic_serial(z_speed, iz, z)
+    if iz == z.n
+        return true
+    end
+
+    return false
+end
+
+function skip_p_electron_bc_points_in_Jacobian_z_solve_z_periodic_serial(z_speed, iz, z)
+    if iz == z.n
         return true
     end
 
