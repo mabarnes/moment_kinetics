@@ -2892,9 +2892,36 @@ moments and moment derivatives
         end
     end
 
-    calculate_ion_moment_derivatives!(moments, fields, geometry, this_scratch,
-                                      scratch_dummy, r, z, r_spectral, z_spectral,
-                                      num_diss_params.ion.moment_dissipation_coefficient)
+    if composition.ion_physics == coll_krook_ions
+        # coll_krook heat flux is calculated from moments in this function via update_ion_qpar
+        update_derived_moments!(this_scratch, moments, vpa, vperp, z, r, composition,
+                                r_spectral, geometry, gyroavs, scratch_dummy,
+                                z_advect, collisions, false)
+
+        calculate_ion_moment_derivatives!(moments, fields, geometry, this_scratch,
+                                        scratch_dummy, r, z, r_spectral, z_spectral,
+                                        num_diss_params.ion.moment_dissipation_coefficient)
+        calculate_electron_moments!(this_scratch, pdf, moments, composition,
+                                    collisions, r, z, vperp, vpa)
+        calculate_electron_moment_derivatives!(moments, this_scratch, scratch_dummy,
+                                            z, z_spectral,
+                                            num_diss_params.electron.moment_dissipation_coefficient,
+                                            composition.electron_physics)
+        # update the electron parallel friction force
+        calculate_electron_parallel_friction_force!(
+            moments.electron.parallel_friction, this_scratch.electron_density,
+            this_scratch.electron_upar, this_scratch.upar, moments.electron.dT_dz,
+            composition.me_over_mi, collisions.electron_fluid.nu_ei,
+            composition.electron_physics)
+        # This should only ever be Boltzmann for coll_krook_ions
+        update_phi!(fields, this_scratch, vperp, z, r, composition, collisions,
+                    moments, geometry, z_spectral, r_spectral, scratch_dummy, gyroavs,
+                    boundaries)
+    else
+        calculate_ion_moment_derivatives!(moments, fields, geometry, this_scratch,
+                                        scratch_dummy, r, z, r_spectral, z_spectral,
+                                        num_diss_params.ion.moment_dissipation_coefficient)
+    end
 
     if composition.electron_physics ∈ (kinetic_electrons,
                                        kinetic_electrons_with_temperature_equation)
