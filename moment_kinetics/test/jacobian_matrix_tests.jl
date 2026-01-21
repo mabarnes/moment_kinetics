@@ -363,6 +363,7 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
         dqpar_dz = @view moments.electron.dqpar_dz[:,ir]
         ion_dens = @view moments.ion.dens[:,ir]
         ion_upar = @view moments.ion.upar[:,ir]
+        ion_T = @view moments.ion.upar[:,ir]
         z_spectral = spectral_objects.z_spectral
         vperp_spectral = spectral_objects.vperp_spectral
         vpa_spectral = spectral_objects.vpa_spectral
@@ -498,14 +499,15 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
         sub_terms = get_electron_sub_terms(dens, ddens_dz, upar_test, dupar_dz, p, dp_dz,
                                            dvth_dz, zeroth_moment, first_moment,
                                            second_moment, third_moment, dthird_moment_dz,
-                                           dqpar_dz, ion_upar, f, dpdf_dz, dpdf_dvpa,
-                                           d2pdf_dvpa2, me, moments, collisions,
-                                           composition, external_source_settings,
-                                           num_diss_params, t_params.electron, ion_dt, z,
-                                           vperp, vpa, z_speed, vpa_speed, ir,
-                                           separate_zeroth_moment, separate_first_moment,
-                                           separate_second_moment, separate_third_moment,
-                                           separate_dp_dz, separate_dq_dz)
+                                           dqpar_dz, ion_upar, ion_T, f, dpdf_dz,
+                                           dpdf_dvpa, d2pdf_dvpa2, me, moments,
+                                           collisions, composition,
+                                           external_source_settings, num_diss_params,
+                                           t_params.electron, ion_dt, z, vperp, vpa,
+                                           z_speed, vpa_speed, ir, separate_zeroth_moment,
+                                           separate_first_moment, separate_second_moment,
+                                           separate_third_moment, separate_dp_dz,
+                                           separate_dq_dz)
         equation_term = get_term(sub_terms)
         add_term_to_Jacobian!(jacobian, :electron_pdf, dt, equation_term, z_speed)
 
@@ -560,11 +562,13 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                                       dp_dz, dvth_dz, zeroth_moment,
                                                       first_moment, second_moment,
                                                       third_moment, dthird_moment_dz,
-                                                      dqpar_dz, ion_upar, f[ivpa,ivperp,:],
+                                                      dqpar_dz, ion_upar, ion_T,
+                                                      f[ivpa,ivperp,:],
                                                       dpdf_dz[ivpa,ivperp,:],
                                                       dpdf_dvpa[ivpa,ivperp,:],
-                                                      d2pdf_dvpa2[ivpa,ivperp,:], me, moments,
-                                                      collisions, external_source_settings,
+                                                      d2pdf_dvpa2[ivpa,ivperp,:], me,
+                                                      moments, collisions,
+                                                      external_source_settings,
                                                       num_diss_params, t_params.electron,
                                                       ion_dt, z, vperp, vpa,
                                                       z_speed[ivpa,ivperp,:], ir, ivperp,
@@ -588,11 +592,12 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                            dens, ddens_dz, upar_test, dupar_dz, p, dp_dz,
                                            dvth_dz, zeroth_moment, first_moment,
                                            second_moment, third_moment, dthird_moment_dz,
-                                           dqpar_dz, ion_upar, f, dpdf_dz, dpdf_dvpa,
-                                           d2pdf_dvpa2, me, moments, collisions, composition,
+                                           dqpar_dz, ion_upar, ion_T, f, dpdf_dz,
+                                           dpdf_dvpa, d2pdf_dvpa2, me, moments,
+                                           collisions, composition,
                                            external_source_settings, num_diss_params,
-                                           t_params.electron, ion_dt, z, vperp, vpa, z_speed,
-                                           vpa_speed, ir, separate_zeroth_moment,
+                                           t_params.electron, ion_dt, z, vperp, vpa,
+                                           z_speed, vpa_speed, ir, separate_zeroth_moment,
                                            separate_first_moment, separate_second_moment,
                                            separate_third_moment, separate_dp_dz,
                                            separate_dq_dz, :explicit_v)
@@ -630,12 +635,12 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                             dp_dz[iz], @view(dvth_dz[iz]), @view(zeroth_moment[iz]),
                             @view(first_moment[iz]), @view(second_moment[iz]),
                             @view(third_moment[iz]), dthird_moment_dz[iz],
-                            @view(dqpar_dz[iz]), ion_upar[iz], @view(f[:,:,iz]),
-                            @view(dpdf_dz[:,:,iz]), @view(dpdf_dvpa[:,:,iz]),
-                            @view(d2pdf_dvpa2[:,:,iz]), me, moments, collisions,
-                            external_source_settings, num_diss_params, t_params.electron,
-                            ion_dt, z, vperp, vpa, @view(z_speed[:,:,iz]),
-                            @view(vpa_speed[:,:,iz]), ir, iz)
+                            @view(dqpar_dz[iz]), ion_upar[iz], ion_T[iz],
+                            @view(f[:,:,iz]), @view(dpdf_dz[:,:,iz]),
+                            @view(dpdf_dvpa[:,:,iz]), @view(d2pdf_dvpa2[:,:,iz]), me,
+                            moments, collisions, external_source_settings,
+                            num_diss_params, t_params.electron, ion_dt, z, vperp, vpa,
+                            @view(z_speed[:,:,iz]), @view(vpa_speed[:,:,iz]), ir, iz)
                     implicit_v_term = get_term(implicit_v_sub_terms)
                     add_term_to_Jacobian!(v_solve_jacobian_ADI_check, :electron_pdf, dt,
                                           implicit_v_term, this_z_speed)
@@ -655,11 +660,12 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                            dens, ddens_dz, upar_test, dupar_dz, p, dp_dz,
                                            dvth_dz, zeroth_moment, first_moment,
                                            second_moment, third_moment, dthird_moment_dz,
-                                           dqpar_dz, ion_upar, f, dpdf_dz, dpdf_dvpa,
-                                           d2pdf_dvpa2, me, moments, collisions, composition,
+                                           dqpar_dz, ion_upar, ion_T, f, dpdf_dz,
+                                           dpdf_dvpa, d2pdf_dvpa2, me, moments,
+                                           collisions, composition,
                                            external_source_settings, num_diss_params,
-                                           t_params.electron, ion_dt, z, vperp, vpa, z_speed,
-                                           vpa_speed, ir, separate_zeroth_moment,
+                                           t_params.electron, ion_dt, z, vperp, vpa,
+                                           z_speed, vpa_speed, ir, separate_zeroth_moment,
                                            separate_first_moment, separate_second_moment,
                                            separate_third_moment, separate_dp_dz,
                                            separate_dq_dz, :explicit_z)
@@ -878,6 +884,7 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
         qpar = @view moments.electron.qpar[:,ir]
         ion_dens = @view moments.ion.dens[:,ir]
         ion_upar = @view moments.ion.upar[:,ir]
+        ion_T = @view moments.ion.temp[:,ir]
         ddens_dz = @view moments.electron.ddens_dz[:,ir]
         dupar_dz = @view moments.electron.dupar_dz[:,ir]
         dp_dz = @view moments.electron.dp_dz[:,ir]
@@ -1002,14 +1009,15 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
         sub_terms = get_electron_sub_terms(dens, ddens_dz, upar, dupar_dz, p, dp_dz,
                                            dvth_dz, zeroth_moment, first_moment,
                                            second_moment, third_moment, dthird_moment_dz,
-                                           dqpar_dz, ion_upar, f, dpdf_dz, dpdf_dvpa,
-                                           d2pdf_dvpa2, me, moments, collisions,
-                                           composition, external_source_settings,
-                                           num_diss_params, t_params, ion_dt, z, vperp,
-                                           vpa, z_speed, vpa_speed, ir,
-                                           separate_zeroth_moment, separate_first_moment,
-                                           separate_second_moment, separate_third_moment,
-                                           separate_dp_dz, separate_dq_dz)
+                                           dqpar_dz, ion_upar, ion_T, f, dpdf_dz,
+                                           dpdf_dvpa, d2pdf_dvpa2, me, moments,
+                                           collisions, composition,
+                                           external_source_settings, num_diss_params,
+                                           t_params, ion_dt, z, vperp, vpa, z_speed,
+                                           vpa_speed, ir, separate_zeroth_moment,
+                                           separate_first_moment, separate_second_moment,
+                                           separate_third_moment, separate_dp_dz,
+                                           separate_dq_dz)
         equation_term = get_term(sub_terms)
         add_term_to_Jacobian!(jacobian, :electron_p, dt, equation_term, z_speed)
 
@@ -1060,7 +1068,7 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                                                       dp_dz, dvth_dz, zeroth_moment,
                                                       first_moment, second_moment,
                                                       third_moment, dthird_moment_dz,
-                                                      dqpar_dz, ion_upar, f[1,1,:],
+                                                      dqpar_dz, ion_upar, ion_T, f[1,1,:],
                                                       dpdf_dz[1,1,:], dpdf_dvpa[1,1,:],
                                                       d2pdf_dvpa2[1,1,:], me, moments,
                                                       collisions, external_source_settings,
@@ -1084,12 +1092,15 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                 explicit_v_sub_terms = get_electron_sub_terms(
                                            dens, ddens_dz, upar, dupar_dz, p, dp_dz, dvth_dz,
                                            zeroth_moment, first_moment, second_moment,
-                                           third_moment, dthird_moment_dz, dqpar_dz, ion_upar,
-                                           f, dpdf_dz, dpdf_dvpa, d2pdf_dvpa2, me, moments,
-                                           collisions, composition, external_source_settings,
-                                           num_diss_params, t_params, ion_dt, z, vperp, vpa,
-                                           z_speed, vpa_speed, ir, ADI_separate_zeroth_moment,
-                                           ADI_separate_first_moment, ADI_separate_second_moment,
+                                           third_moment, dthird_moment_dz, dqpar_dz,
+                                           ion_upar, ion_T, f, dpdf_dz, dpdf_dvpa,
+                                           d2pdf_dvpa2, me, moments, collisions,
+                                           composition, external_source_settings,
+                                           num_diss_params, t_params, ion_dt, z, vperp,
+                                           vpa, z_speed, vpa_speed, ir,
+                                           ADI_separate_zeroth_moment,
+                                           ADI_separate_first_moment,
+                                           ADI_separate_second_moment,
                                            ADI_separate_third_moment, ADI_separate_dp_dz,
                                            ADI_separate_dq_dz, :explicit_v)
                 explicit_v_term = get_term(explicit_v_sub_terms)
@@ -1126,12 +1137,12 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                             dp_dz[iz], @view(dvth_dz[iz]), @view(zeroth_moment[iz]),
                             @view(first_moment[iz]), @view(second_moment[iz]),
                             @view(third_moment[iz]), dthird_moment_dz[iz],
-                            @view(dqpar_dz[iz]), ion_upar[iz], @view(f[:,:,iz]),
-                            @view(dpdf_dz[:,:,iz]), @view(dpdf_dvpa[:,:,iz]),
-                            @view(d2pdf_dvpa2[:,:,iz]), me, moments, collisions,
-                            external_source_settings, num_diss_params, t_params, ion_dt, z,
-                            vperp, vpa, @view(z_speed[:,:,iz]), @view(vpa_speed[:,:,iz]), ir,
-                            iz)
+                            @view(dqpar_dz[iz]), ion_upar[iz], ion_T[iz],
+                            @view(f[:,:,iz]), @view(dpdf_dz[:,:,iz]),
+                            @view(dpdf_dvpa[:,:,iz]), @view(d2pdf_dvpa2[:,:,iz]), me,
+                            moments, collisions, external_source_settings,
+                            num_diss_params, t_params, ion_dt, z, vperp, vpa,
+                            @view(z_speed[:,:,iz]), @view(vpa_speed[:,:,iz]), ir, iz)
                     implicit_v_term = get_term(implicit_v_sub_terms)
                     add_term_to_Jacobian!(v_solve_jacobian_ADI_check, :electron_p, dt,
                                           implicit_v_term, this_z_speed)
@@ -1150,12 +1161,15 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                 explicit_z_sub_terms = get_electron_sub_terms(
                                            dens, ddens_dz, upar, dupar_dz, p, dp_dz, dvth_dz,
                                            zeroth_moment, first_moment, second_moment,
-                                           third_moment, dthird_moment_dz, dqpar_dz, ion_upar,
-                                           f, dpdf_dz, dpdf_dvpa, d2pdf_dvpa2, me, moments,
-                                           collisions, composition, external_source_settings,
-                                           num_diss_params, t_params, ion_dt, z, vperp, vpa,
-                                           z_speed, vpa_speed, ir, ADI_separate_zeroth_moment,
-                                           ADI_separate_first_moment, ADI_separate_second_moment,
+                                           third_moment, dthird_moment_dz, dqpar_dz,
+                                           ion_upar, ion_T, f, dpdf_dz, dpdf_dvpa,
+                                           d2pdf_dvpa2, me, moments, collisions,
+                                           composition, external_source_settings,
+                                           num_diss_params, t_params, ion_dt, z, vperp,
+                                           vpa, z_speed, vpa_speed, ir,
+                                           ADI_separate_zeroth_moment,
+                                           ADI_separate_first_moment,
+                                           ADI_separate_second_moment,
                                            ADI_separate_third_moment, ADI_separate_dp_dz,
                                            ADI_separate_dq_dz, :explicit_z)
                 explicit_z_term = get_term(explicit_z_sub_terms)
@@ -1195,7 +1209,7 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                              neutral_dens=moments.neutral.dens[:,ir,1],
                              neutral_uz=moments.neutral.uz[:,ir,1],
                              neutral_p=moments.neutral.p[:,ir,1], moments, collisions,
-                             composition, z, z_spectral, external_source_settings,
+                             composition, z, vperp, z_spectral, external_source_settings,
                              num_diss_params, t_params, ion_dt, scratch_dummy, dt, ir)
             # Now
             #   residual = f_electron_old + dt*RHS(f_electron_newvar)
@@ -2363,10 +2377,10 @@ function runtests()
                     kwargs[:residual], kwargs[:dens], kwargs[:this_p], kwargs[:dens],
                     kwargs[:upar], kwargs[:ppar], kwargs[:ion_dens], kwargs[:ion_upar],
                     kwargs[:ion_p], kwargs[:neutral_dens], kwargs[:neutral_uz],
-                    kwargs[:neutral_p], kwargs[:moments].electron, kwargs[:collisions],
+                    kwargs[:neutral_p], kwargs[:moments], kwargs[:collisions],
                     kwargs[:dt], kwargs[:composition],
                     kwargs[:external_source_settings].electron, kwargs[:num_diss_params],
-                    kwargs[:z], kwargs[:ir])
+                    kwargs[:z], kwargs[:vperp], kwargs[:ir])
                 return nothing
             end
             test_get_p_term(this_test_input, "electron_energy_equation",

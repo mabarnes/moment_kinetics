@@ -135,7 +135,7 @@ struct moments_ion_substruct{ndim_moment_wall}
     # this is the thermal speed
     vth::MPISharedArray{mk_float,ndim_moment}
     # this is the temperature
-    temp::MPISharedArray{mk_float,3}
+    temp::MPISharedArray{mk_float,ndim_moment}
     # generalised Chodura integrals for the lower and upper plates
     chodura_integral_lower::MPISharedArray{mk_float,ndim_moment_wall}
     chodura_integral_upper::MPISharedArray{mk_float,ndim_moment_wall}
@@ -756,6 +756,7 @@ end
     dq_dz
     dq_dz_constraint_rhs
     u_ion
+    T_ion
     wperp
     wpa
     f
@@ -776,6 +777,7 @@ end
     krook_adjust_vth_1V::mk_float
     krook_adjust_1V::mk_float
     Maxwellian_prefactor::mk_float
+    ion_electron_energy_exchange::Bool
 end
 
 end

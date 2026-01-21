@@ -13,6 +13,7 @@ export calculate_electron_qpar_from_pdf!
 export update_electron_vth_temperature!
 
 using ..calculus: integral
+using ..collision_frequencies
 using ..communication
 using ..debugging
 using ..derivatives: derivative_z_anyzv!
@@ -226,7 +227,7 @@ function electron_energy_equation!(p_out, electron_density_out, p_in, electron_d
                                    electron_upar, electron_ppar, ion_density, ion_upar,
                                    ion_p, density_neutral, uz_neutral, p_neutral, moments,
                                    collisions, dt, composition, electron_source_settings,
-                                   num_diss_params, r, z; conduction=true)
+                                   num_diss_params, r, z, vperp; conduction=true)
     @begin_r_anyzv_region()
     @loop_r ir begin
         @views electron_energy_equation_no_r!(p_out[:,ir], electron_density_out[:,ir],
@@ -237,7 +238,7 @@ function electron_energy_equation!(p_out, electron_density_out, p_in, electron_d
                                               uz_neutral[:,ir,:], p_neutral[:,ir,:],
                                               moments, collisions, dt, composition,
                                               electron_source_settings, num_diss_params,
-                                              z, ir; conduction=conduction)
+                                              z, vperp, ir; conduction=conduction)
     end
     return nothing
 end
@@ -248,8 +249,8 @@ end
                          p_out, electron_density_out, p_in, electron_density_in,
                          electron_upar, electron_ppar, ion_density, ion_upar, ion_p,
                          density_neutral, uz_neutral, p_neutral, moments, collisions, dt,
-                         composition, electron_source_settings, num_diss_params, z, ir;
-                         conduction=true, ion_dt=nothing) = begin
+                         composition, electron_source_settings, num_diss_params, z, vperp,
+                         ir; conduction=true, ion_dt=nothing) = begin
     if composition.electron_physics == kinetic_electrons_with_temperature_equation
         # Hacky way to implement temperature equation:
         #  - convert p to T by dividing by density
@@ -262,18 +263,20 @@ end
         # define some abbreviated variables for convenient use in rest of function
         me_over_mi = composition.me_over_mi
         nu_ei = collisions.electron_fluid.nu_ei
-        T_in = @view moments.temp[:,ir]
-        dT_dt = @view moments.dT_dt[:,ir]
+        T_in = @view moments.electron.temp[:,ir]
+        dT_dt = @view moments.electron.dT_dt[:,ir]
+        dT_dz = @view moments.electron.dT_dz[:,ir]
+        dupar_dz = @view moments.electron.dupar_dz[:,ir]
         # calculate contribution to rhs of energy equation (formulated in terms of pressure)
         # arising from derivatives of p, qpar and upar
         @loop_z iz begin
-            dT_dt[iz] = -(electron_upar[iz] * moments.dT_dz[iz,ir]
-                          + 2.0 / 3.0 * electron_ppar[iz] / density_in[iz] *
-                            moments.dupar_dz[iz,ir])
+            dT_dt[iz] = -(electron_upar[iz] * dT_dz[iz]
+                          + 2.0 / 3.0 * electron_ppar[iz] / density_in[iz] * dupar_dz[iz])
         end
         if conduction
+            dqpar_dz = @view moments.electron.dqpar_dz[:,ir]
             @loop_z iz begin
-                dT_dt[iz] -= 2.0 / 3.0 * moments.dqpar_dz[iz,ir] / electron_density_in[iz]
+                dT_dt[iz] -= 2.0 / 3.0 * dqpar_dz[iz] / electron_density_in[iz]
             end
         end
         # compute the contribution to the rhs of the energy equation
@@ -281,17 +284,37 @@ end
         diffusion_coefficient = num_diss_params.electron.moment_dissipation_coefficient
         if diffusion_coefficient > 0.0
             error("diffusion not implemented for electron temperature equation yet")
+            d2T_dz2 = @view moments.electron.d2T_dz2[:,ir]
             @loop_z iz begin
-                dT_dt[iz] += diffusion_coefficient*moments.d2T_dz2[iz,ir]
+                dT_dt[iz] += diffusion_coefficient * d2T_dz2[iz]
             end
         end
         # compute the contribution to the rhs of the energy equation
         # arising from electron-ion collisions
         if nu_ei > 0.0
+            # Note that this version was implemented for an experimental 'Braginskii
+            # fluid' option that used a constant nu_ei.
+            parallel_friction = @view moments.electron.parallel_friction[:,ir]
             @loop_s_z is iz begin
                 dT_dt[iz] += (2 * me_over_mi * nu_ei * (ion_p[iz,is]/ion_density[iz,is] - T_in[iz]))
-                dT_dt[iz] += ((2/3) * moments.parallel_friction[iz,ir]
+                dT_dt[iz] += ((2/3) * parallel_friction[iz]
                                     * (ion_upar[iz,is]-electron_upar[iz])) / electron_density_in[iz]
+            end
+        end
+        if collisions.ion_electron_energy_exchange
+            vth = @view moments.electron.vth[:,ir]
+            T_e = @view moments.electron.temp[:,ir]
+            T_i = @view moments.ion.temp[:,ir,:]
+            if vperp.n == 1
+                adjust_vth = sqrt(3.0)
+            else
+                adjust_vth = 1.0
+            end
+            @loop_s_z is iz begin
+                this_nu_ei = get_collision_frequency_ei(collisions, ion_density[iz,is],
+                                                        adjust_vth * vth[iz])
+                dT_dt[iz] += 2.0 * me_over_mi * this_nu_ei *
+                             (T_e[iz] - T_i[iz,is])
             end
         end
         # add in contributions due to charge exchange/ionization collisions
@@ -320,8 +343,8 @@ end
 
         for index ∈ eachindex(electron_source_settings)
             if electron_source_settings[index].active
-                pressure_source_amplitude = @view moments.external_source_pressure_amplitude[:, ir, index]
-                density_source_amplitude = @view moments.external_source_density_amplitude[:, ir, index]
+                pressure_source_amplitude = @view moments.electron.external_source_pressure_amplitude[:, ir, index]
+                density_source_amplitude = @view moments.electron.external_source_density_amplitude[:, ir, index]
                 @loop_z iz begin
                     dT_dt[iz] += (pressure_source_amplitude[iz]
                                   - T_in[iz] * density_source_amplitude[iz]) /
@@ -360,34 +383,55 @@ end
         # define some abbreviated variables for convenient use in rest of function
         me_over_mi = composition.me_over_mi
         nu_ei = collisions.electron_fluid.nu_ei
-        dp_dt = @view moments.dp_dt[:,ir]
+        dp_dt = @view moments.electron.dp_dt[:,ir]
+        dp_dz = @view moments.electron.dp_dz[:,ir]
+        dupar_dz = @view moments.electron.dupar_dz[:,ir]
         # calculate contribution to rhs of energy equation (formulated in terms of pressure)
         # arising from derivatives of p, qpar and upar
         @loop_z iz begin
-            dp_dt[iz] = -(electron_upar[iz]*moments.dp_dz[iz,ir]
-                          + p_in[iz]*moments.dupar_dz[iz,ir]
-                          + 2.0 / 3.0 * electron_ppar[iz]*moments.dupar_dz[iz,ir])
+            dp_dt[iz] = -(electron_upar[iz]*dp_dz[iz]
+                          + p_in[iz]*dupar_dz[iz]
+                          + 2.0 / 3.0 * electron_ppar[iz]*dupar_dz[iz])
         end
         if conduction
+            dqpar_dz = @view moments.electron.dqpar_dz[:,ir]
             @loop_z iz begin
-                dp_dt[iz] -= 2.0 / 3.0 * moments.dqpar_dz[iz,ir]
+                dp_dt[iz] -= 2.0 / 3.0 * dqpar_dz[iz]
             end
         end
         # compute the contribution to the rhs of the energy equation
         # arising from artificial diffusion
         diffusion_coefficient = num_diss_params.electron.moment_dissipation_coefficient
         if diffusion_coefficient > 0.0
+            d2p_dz2 = @view moments.electron.d2p_dz2[:,ir]
             @loop_z iz begin
-                dp_dt[iz] += diffusion_coefficient*moments.d2p_dz2[iz,ir]
+                dp_dt[iz] += diffusion_coefficient * d2p_dz2[iz]
             end
         end
         # compute the contribution to the rhs of the energy equation
         # arising from electron-ion collisions
         if nu_ei > 0.0
+            # Note that this version was implemented for an experimental 'Braginskii
+            # fluid' option that used a constant nu_ei.
             @loop_s_z is iz begin
                 dp_dt[iz] += (2 * me_over_mi * nu_ei * (ion_p[iz,is] - p_in[iz]))
-                dp_dt[iz] += ((2/3) * moments.parallel_friction[iz]
+                dp_dt[iz] += ((2/3) * moments.electron.parallel_friction[iz]
                               * (ion_upar[iz,is]-electron_upar[iz]))
+            end
+        end
+        if collisions.ion_electron_energy_exchange
+            vth = @view moments.electron.vth[:,ir]
+            ion_T = @view moments.ion.temp[:,ir,:]
+            if vperp.n == 1
+                adjust_vth = sqrt(3.0)
+            else
+                adjust_vth = 1.0
+            end
+            @loop_s_z is iz begin
+                this_nu_ei = get_collision_frequency_ei(collisions, ion_density[iz,is],
+                                                        adjust_vth * vth[iz])
+                dp_dt[iz] += 2.0 * me_over_mi * this_nu_ei *
+                             (ion_T[iz,is] * electron_density_in[iz] - p_in[iz])
             end
         end
         # add in contributions due to charge exchange/ionization collisions
@@ -416,7 +460,7 @@ end
 
         for index ∈ eachindex(electron_source_settings)
             if electron_source_settings[index].active
-                source_amplitude = @view moments.external_source_pressure_amplitude[:, ir, index]
+                source_amplitude = @view moments.electron.external_source_pressure_amplitude[:, ir, index]
                 @loop_z iz begin
                     dp_dt[iz] += source_amplitude[iz]
                 end
@@ -426,7 +470,7 @@ end
         if ion_dt !== nothing
             # Add source term to turn steady state solution into a backward-Euler
             # update of electron_p with the ion timestep `ion_dt`.
-            p_previous_ion_step = @view moments.p[:,ir]
+            p_previous_ion_step = @view moments.electron.p[:,ir]
             @loop_z iz begin
                 # At this point, p_out = p_in + dt*RHS(p_in). Here we add a
                 # source/damping term so that in the steady state of the electron
@@ -457,11 +501,21 @@ function get_electron_energy_equation_term(sub_terms::ElectronSubTerms)
     dp_dz = sub_terms.dp_dz
     ppar = sub_terms.ppar
     dq_dz = sub_terms.dq_dz
+    ion_electron_energy_exchange = sub_terms.ion_electron_energy_exchange
 
     term = (u * dp_dz + p * du_dz
             + 2.0 / 3.0 * ppar * du_dz
             + 2.0 / 3.0 * dq_dz
            )
+
+    if ion_electron_energy_exchange
+        collisions = sub_terms.collisions
+        vth = sub_terms.vth
+        T_ion = sub_terms.T_ion
+        krook_adjust_vth_1V = sub_terms.krook_adjust_vth_1V
+        nu_ei = get_collision_frequency_ei(collisions, n, vth * krook_adjust_vth_1V)
+        term += - 2.0 * me * nu_ei * (p - T_ion * n)
+    end
 
     # No need to add source terms, because the pressure source does not depend on the
     # pressure or the electron shape function, so does not contribute to the Jacobian.

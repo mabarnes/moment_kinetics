@@ -2003,7 +2003,8 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
                  moments.ion.vth, moments.ion.dT_dz, pdf.ion.norm, vpa, vperp, z, r,
                  composition, drift_kinetic_ions, collisions, moments.evolve_density, moments.evolve_upar,
                  moments.evolve_p)
-    update_vth!(moments.ion.vth, moments.ion.p, moments.ion.dens, z, r, composition)
+    update_vth!(moments.ion.vth, moments.ion.temp, moments.ion.p, moments.ion.dens, z, r,
+                composition)
 
     @begin_serial_region()
     @serial_region begin

@@ -394,10 +394,17 @@ Can integrate the drift kinetic equation to give the moment equations:
     + \frac{3}{2} b^z u_{i\parallel} \frac{\partial p_i}{\partial z} + \frac{3}{2} b^z p_i \frac{\partial u_{i\parallel}}{\partial z} \nonumber \\
   &\quad= - \frac{1}{2} R_\mathrm{CX} n_i n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
         + \frac{1}{2} R_\mathrm{ioniz} n_e n_n \left(3 T_n + m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
-  &\qquad+ \frac{3}{2} S_{i,p} \\
+  &\qquad+ \frac{3 n_e m_e \nu_{ei}}{m_i}\left(T_e - T_i\right) + \frac{3}{2} S_{i,p} \\
   \end{align}
   ```
-  where the energy source is $S_{s,E} = \frac{1}{2} m_s \int v^2 S_s d^3 v$,
+  The energy exchange term $\frac{3 n_e m_e \nu_{ei}}{m_i}\left(T_e -
+  T_i\right)$ is a simplified form, using the value given by colliding two
+  Maxwellian distributions (see report TN-07 "2D drift kinetic model with wall
+  boundary conditions") and is only included when evolving the electron
+  pressure (not Boltzmann-response electrons) - in the Boltzmann-response
+  electron case the electron temperature $T_e$ is assumed constant so energy
+  taken from or given to the ions would not be lost or gained from anywhere.
+  The energy source is $S_{s,E} = \frac{1}{2} m_s \int v^2 S_s d^3 v$,
   and the pressure source is
   $S_{s,p} = \frac{1}{3} m_s \int |\boldsymbol{v} - u_{s\parallel}\hat{\boldsymbol{z}}|^2 S_s d^3 v = \frac{2}{3} S_{s,E} - \frac{2}{3} u_{s\parallel} S_{s,\mathrm{mom}} + \frac{1}{3} m_s u_{s\parallel}^2 S_{s,n}$.
   We use the pressure as an evolving variable in the code, so this is the
@@ -417,7 +424,7 @@ Can integrate the drift kinetic equation to give the moment equations:
     + \frac{3}{2} b^z u_{i\parallel} \frac{\partial n_i T_i}{\partial z} + \frac{3}{2} b^z n_i T_i \frac{\partial u_{i\parallel}}{\partial z} \nonumber \\
   &\quad= - \frac{1}{2} R_\mathrm{CX} n_i n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
         + \frac{1}{2} R_\mathrm{ioniz} n_e n_n \left(3 T_n + m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
-  &\qquad+ \frac{3}{2} S_{i,p} \\
+  &\qquad+ \frac{3 n_e m_e \nu_{ei}}{m_i}\left(T_e - T_i\right) + \frac{3}{2} S_{i,p} \\
 
   & \frac{3}{2} n_i \frac{\partial T_i}{\partial t} + \frac{3}{2} T_i \frac{\partial n_i}{\partial t}
     + \frac{3}{2} n_i v_E^r \frac{\partial T_i}{\partial{r}}
@@ -428,7 +435,7 @@ Can integrate the drift kinetic equation to give the moment equations:
     + \frac{3}{2} b^z n_i u_{i\parallel} \frac{\partial T_i}{\partial z} + \frac{3}{2} b^z u_{i\parallel} T_i \frac{\partial n_i}{\partial z} + \frac{3}{2} b^z n_i T_i \frac{\partial u_{i\parallel}}{\partial z} \nonumber \\
   &\quad= - \frac{1}{2} R_\mathrm{CX} n_i n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
         + \frac{1}{2} R_\mathrm{ioniz} n_e n_n \left(3 T_n + m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
-  &\qquad+ \frac{3}{2} S_{i,p} \\
+  &\qquad+ \frac{3 n_e m_e \nu_{ei}}{m_i}\left(T_e - T_i\right) + \frac{3}{2} S_{i,p} \\
 
   & \frac{3}{2} n_i \frac{\partial T_i}{\partial t}
     - \frac{3}{2} T_i v_E^r \frac{\partial n_i}{\partial r} - \frac{3}{2} T_i v_E^z \frac{\partial n_i}{\partial z} - \frac{3}{2} b^z n_i T_i \frac{\partial u_{i\parallel}}{\partial z} - \frac{3}{2} b^z u_{i\parallel} T_i \frac{\partial n_i}{\partial z} + \frac{3}{2} T_i R_\mathrm{ioniz} n_e n_n + \frac{3}{2} T_i S_{i,n}
@@ -440,7 +447,7 @@ Can integrate the drift kinetic equation to give the moment equations:
     + \frac{3}{2} b^z n_i u_{i\parallel} \frac{\partial T_i}{\partial z} + \frac{3}{2} b^z u_{i\parallel} T_i \frac{\partial n_i}{\partial z} + \frac{3}{2} b^z n_i T_i \frac{\partial u_{i\parallel}}{\partial z} \nonumber \\
   &\quad= - \frac{1}{2} R_\mathrm{CX} n_i n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
         + \frac{1}{2} R_\mathrm{ioniz} n_e n_n \left(3 T_n + m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
-  &\qquad+ \frac{3}{2} S_{i,p} \\
+  &\qquad+ \frac{3 n_e m_e \nu_{ei}}{m_i}\left(T_e - T_i\right) + \frac{3}{2} S_{i,p} \\
   \end{align}
   ```
   ```@raw html
@@ -455,7 +462,7 @@ Can integrate the drift kinetic equation to give the moment equations:
     + \frac{3}{2} b^z n_i u_{i\parallel} \frac{\partial T_i}{\partial z} \nonumber \\
   &\quad= - \frac{1}{2} R_\mathrm{CX} n_i n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
         + \frac{1}{2} R_\mathrm{ioniz} n_e n_n \left(3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
-  &\qquad+ \frac{3}{2} S_{i,p} - \frac{3}{2} T_i S_{i,n} \\
+  &\qquad+ \frac{3 n_e m_e \nu_{ei}}{m_i}\left(T_e - T_i\right) + \frac{3}{2} S_{i,p} - \frac{3}{2} T_i S_{i,n} \\
   \end{align}
   ```
   ```@raw html
@@ -481,7 +488,7 @@ Can integrate the drift kinetic equation to give the moment equations:
     + \frac{3}{2} b^z m_i n_i u_{i\parallel} v_{Ti} \frac{\partial v_{Ti}}{\partial z} \nonumber \\
   &\quad= - \frac{1}{2} R_\mathrm{CX} n_i n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
         + \frac{1}{2} R_\mathrm{ioniz} n_e n_n \left(3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
-  &\qquad+ \frac{3}{2} S_{i,p} - \frac{3}{2} T_i S_{i,n} \\
+  &\qquad+ \frac{3 n_e m_e \nu_{ei}}{m_i}\left(T_e - T_i\right) + \frac{3}{2} S_{i,p} - \frac{3}{2} T_i S_{i,n} \\
   \end{align}
   ```
   ```@raw html
@@ -494,7 +501,7 @@ Can integrate the drift kinetic equation to give the moment equations:
        \nonumber \\
   &\qquad- \frac{1}{2} R_\mathrm{CX} n_i n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
         + \frac{1}{2} R_\mathrm{ioniz} n_e n_n \left(3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
-  &\qquad+ \frac{3}{2} S_{i,p} - \frac{3}{2} T_i S_{i,n} \\
+  &\qquad+ \frac{3 n_e m_e \nu_{ei}}{m_i}\left(T_e - T_i\right) + \frac{3}{2} S_{i,p} - \frac{3}{2} T_i S_{i,n} \\
   \end{align}
   ```
 
@@ -889,10 +896,10 @@ time-derivative-of-moment terms
 &\quad= - b^z w_\parallel \frac{\partial u_{i\parallel}}{\partial z} + b^z \frac{1}{v_{Ti}} \frac{\partial p_{i\parallel}}{\partial z} - \frac{1}{v_{Ti}} R_\mathrm{CX} n_n \left(u_{n\parallel} - u_{i\parallel}\right) - \frac{1}{v_{Ti}} R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \left(u_{n\parallel} - u_{i\parallel}\right) - \frac{S_{i,\mathrm{mom}}}{m_i n_iv_{Ti}} + \frac{u_{i\parallel} S_{i,n}}{n_i v_{Ti}} \\
 
 &\frac{1}{v_{Ti}} \left( \frac{\partial v_{Ti}}{\partial t} + \dot{r}\frac{\partial v_{Ti}}{\partial r} + \dot{z}\frac{\partial v_{Ti}}{\partial z} \right) \nonumber \\
-&\quad= \frac{1}{v_{Ti}} \left( - \cancel{v_E^r \frac{\partial v_{Ti}}{\partial r}} - \cancel{v_E^z \frac{\partial v_{Ti}}{\partial z}} - \cancel{b^z u_{i\parallel} \frac{\partial v_{Ti}}{\partial z}} - \frac{2 b^z}{3 m_i n_i v_{Ti}} \frac{\partial q_{i\parallel}}{\partial z} - \frac{2 b^z}{3 m_i n_i v_{Ti}} p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z} - \frac{1}{3 m_i v_{Ti}} R_\mathrm{CX} n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2\right) + \frac{1}{3 m_i n_i v_{Ti}} R_\mathrm{ioniz} n_e n_n \left(3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2\right) + \frac{S_{i,p}}{m_i n_i v_{Ti}} - \frac{T_i S_{i,n}}{m_i n_i v_{Ti}} \right) \nonumber \\
+&\quad= \frac{1}{v_{Ti}} \left( - \cancel{v_E^r \frac{\partial v_{Ti}}{\partial r}} - \cancel{v_E^z \frac{\partial v_{Ti}}{\partial z}} - \cancel{b^z u_{i\parallel} \frac{\partial v_{Ti}}{\partial z}} - \frac{2 b^z}{3 m_i n_i v_{Ti}} \frac{\partial q_{i\parallel}}{\partial z} - \frac{2 b^z}{3 m_i n_i v_{Ti}} p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z} - \frac{1}{3 m_i v_{Ti}} R_\mathrm{CX} n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2\right) + \frac{1}{3 m_i n_i v_{Ti}} R_\mathrm{ioniz} n_e n_n \left(3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2\right) + \frac{2 n_e m_e \nu_{ei}}{m_i^2 n_i v_{Ti}}\left(T_e - T_i\right) + \frac{S_{i,p}}{m_i n_i v_{Ti}} - \frac{T_i S_{i,n}}{m_i n_i v_{Ti}} \right) \nonumber \\
 &\qquad + \cancel{\frac{1}{v_{Ti}} v_E^r \frac{\partial v_{Ti}}{\partial r}} \nonumber \\
 &\qquad + \frac{1}{v_{Ti}} \left( \cancel{v_E^z} + b^z v_{Ti} w_\parallel + \cancel{b^z u_{i\parallel}} \right) \frac{\partial v_{Ti}}{\partial z} \nonumber \\
-&\quad= b^z w_\parallel \frac{\partial v_{Ti}}{\partial z} - \frac{b^z}{3 p_i} \frac{\partial q_{i\parallel}}{\partial z} - \frac{b^z}{3 p_i} p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z} - \frac{1}{6 T_i} R_\mathrm{CX} n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2\right) + \frac{1}{6 p_i} R_\mathrm{ioniz} n_e n_n \left(3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2\right) + \frac{S_{i,p}}{2 p_i} - \frac{S_{i,n}}{2 n_i} \nonumber \\
+&\quad= b^z w_\parallel \frac{\partial v_{Ti}}{\partial z} - \frac{b^z}{3 p_i} \frac{\partial q_{i\parallel}}{\partial z} - \frac{b^z}{3 p_i} p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z} - \frac{1}{6 T_i} R_\mathrm{CX} n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2\right) + \frac{1}{6 p_i} R_\mathrm{ioniz} n_e n_n \left(3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2\right) + \frac{n_e m_e \nu_{ei}}{m_i p_i}\left(T_e - T_i\right) + \frac{S_{i,p}}{2 p_i} - \frac{S_{i,n}}{2 n_i} \nonumber \\
 
 &\frac{1}{n_i} \left( \frac{\partial n_i}{\partial t} + \dot{r}\frac{\partial n_i}{\partial r} + \dot{z} \frac{\partial n_i}{\partial z} \right) \nonumber \\
 &\quad= \frac{1}{n_i} \left( - \cancel{v_E^r \frac{\partial n_i}{\partial r}} - \cancel{v_E^z \frac{\partial n_i}{\partial z}} - b^z n_i \frac{\partial u_{i\parallel}}{\partial z} - \cancel{b^z u_{i\parallel} \frac{\partial n_i}{\partial z}} + R_\mathrm{ioniz} n_e n_n + S_{i,n}
@@ -902,7 +909,7 @@ time-derivative-of-moment terms
 &\quad= b^z \frac{v_{Ti} w_\parallel}{n_i} \frac{\partial n}{\partial z} - b^z \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{S_{i,n}}{n_i} \\
 
 \dot{w}_\parallel &= - b^z w_\parallel \frac{\partial u_{i\parallel}}{\partial z} + b^z \frac{1}{v_{Ti}} \frac{\partial p_{i\parallel}}{\partial z} - \frac{1}{v_{Ti}} R_\mathrm{CX} n_n \left(u_{n\parallel} - u_{i\parallel}\right) - \frac{1}{v_{Ti}} R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \left(u_{n\parallel} - u_{i\parallel}\right) - \frac{S_{i,\mathrm{mom}}}{m_i n_iv_{Ti}} + \frac{u_{i\parallel} S_{i,n}}{n_i v_{Ti}} \nonumber \\
-&\quad - b^z w_\parallel^2 \frac{\partial v_{Ti}}{\partial z} + \frac{b^z w_\parallel}{3 p_i} \frac{\partial q_{i\parallel}}{\partial z} + \frac{b^z w_\parallel}{3 p_i} p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z} + \frac{w_\parallel}{6 T_i} R_\mathrm{CX} n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2\right) - \frac{w_\parallel}{6 p_i} R_\mathrm{ioniz} n_e n_n \left(3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2\right) - \frac{w_\parallel S_{i,p}}{2 p_i} + \frac{w_\parallel S_{i,n}}{2 n_i} \\
+&\quad - b^z w_\parallel^2 \frac{\partial v_{Ti}}{\partial z} + \frac{b^z w_\parallel}{3 p_i} \frac{\partial q_{i\parallel}}{\partial z} + \frac{b^z w_\parallel}{3 p_i} p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z} + \frac{w_\parallel}{6 T_i} R_\mathrm{CX} n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2\right) - \frac{w_\parallel}{6 p_i} R_\mathrm{ioniz} n_e n_n \left(3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2\right) - \frac{w_\parallel \frac{n_e m_e \nu_{ei}}{m_i p_i}\left(T_e - T_i\right) + w_\parallel S_{i,p}}{2 p_i} + \frac{w_\parallel S_{i,n}}{2 n_i} \\
 \end{align}
 ```
 ```@raw html
@@ -913,16 +920,16 @@ time-derivative-of-moment terms
 \dot{w}_\parallel &= b^z \frac{1}{m_i n_i v_{Ti}} \frac{\partial p_{i\parallel}}{\partial z} - \frac{1}{v_{Ti}} R_\mathrm{CX} n_n \left(u_{n\parallel} - u_{i\parallel}\right) - \frac{1}{v_{Ti}} R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \left(u_{n\parallel} - u_{i\parallel}\right) - \frac{S_{i,\mathrm{mom}}}{m_i n_iv_{Ti}} + \frac{u_{i\parallel} S_{i,n}}{n_i v_{Ti}} \nonumber \\
 &\quad + w_\parallel \left( - b^z \frac{\partial u_{i\parallel}}{\partial z} + \frac{b^z}{3 p_i} \frac{\partial q_{i\parallel}}{\partial z} + \frac{b^z}{3 p_i} p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z} \right. \nonumber \\
 &\qquad\qquad + \frac{1}{6 T_i} R_\mathrm{CX} n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2\right) \nonumber \\
-&\qquad\qquad \left. - \frac{1}{6 p_i} R_\mathrm{ioniz} n_e n_n \left(3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2\right) - \frac{S_{i,p}}{2 p_i} + \frac{S_{i,n}}{2 n_i} \right) \nonumber \\
+&\qquad\qquad \left. - \frac{1}{6 p_i} R_\mathrm{ioniz} n_e n_n \left(3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2\right) - \frac{n_e m_e \nu_{ei}}{m_i p_i}\left(T_e - T_i\right) - \frac{S_{i,p}}{2 p_i} + \frac{S_{i,n}}{2 n_i} \right) \nonumber \\
 &\quad - b^z w_\parallel^2 \frac{\partial v_{Ti}}{\partial z} \\
 
 \dot{w}_\perp &= w_\perp \left( - b^z w_\parallel \frac{\partial v_{Ti}}{\partial z} + \frac{b^z}{3 p_i} \frac{\partial q_{i\parallel}}{\partial z} + \frac{b^z}{3 p_i} p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z} \right . \nonumber \\
 &\qquad\qquad + \frac{1}{6 T_i} R_\mathrm{CX} n_n \left(3 T_i + 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2\right) \nonumber \\
-&\qquad\qquad \left . - \frac{1}{6 p_i} R_\mathrm{ioniz} n_e n_n \left(3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2\right) - \frac{S_{i,p}}{2 p_i} + \frac{S_{i,n}}{2 n_i} \right) \nonumber \\
+&\qquad\qquad \left . - \frac{1}{6 p_i} R_\mathrm{ioniz} n_e n_n \left(3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2\right) - \frac{n_e m_e \nu_{ei}}{m_i p_i}\left(T_e - T_i\right) - \frac{S_{i,p}}{2 p_i} + \frac{S_{i,n}}{2 n_i} \right) \nonumber \\
 
 \frac{\dot{F}_i}{F_i} &= 3 b^z w_\parallel \frac{\partial v_{Ti}}{\partial z} - \frac{b^z}{p_i} \frac{\partial q_{i\parallel}}{\partial z} - \frac{b^z}{p_i} p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z} \nonumber \\
 &\quad - \frac{1}{2 T_i} R_\mathrm{CX} n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2\right) \nonumber \\
-&\quad + \frac{1}{2 p_i} R_\mathrm{ioniz} n_e n_n \left(3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2\right) + \frac{3 S_{i,p}}{2 p_i} - \frac{3 S_{i,n}}{2 n_i} \nonumber \\
+&\quad + \frac{1}{2 p_i} R_\mathrm{ioniz} n_e n_n \left(3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2\right) + \frac{3 n_e m_e \nu_{ei}}{m_i p_i}\left(T_e - T_i\right) + \frac{3 S_{i,p}}{2 p_i} - \frac{3 S_{i,n}}{2 n_i} \nonumber \\
 &\quad - b^z \frac{v_{Ti} w_\parallel}{n_i} \frac{\partial n}{\partial z} + b^z \frac{\partial u_{i\parallel}}{\partial z} - R_\mathrm{ioniz} \frac{n_e n_n}{n_i} - \frac{S_{i,n}}{n_i} \\
 \end{align}
 ```
@@ -1597,7 +1604,7 @@ conventions here.
   + \frac{3}{2} b^z \hat{u}_{i\parallel} \frac{\partial \hat{p}_i}{\partial \hat{z}} + \frac{3}{2} b^z \hat{p}_i \frac{\partial \hat{u}_{i\parallel}}{\partial \hat{z}} \nonumber \\
 &\quad= - \frac{1}{2} \hat{R}_\mathrm{CX} \hat{n}_i \hat{n}_n \left(3 \hat{T}_i - 3 \hat{T}_n - \hat{m}_i (\hat{u}_{i\parallel} - \hat{u}_{n\parallel})^2 \right)
       + \frac{1}{2} \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \left(3 \hat{T}_n + \hat{m}_i (\hat{u}_{i\parallel} - \hat{u}_{n\parallel})^2 \right) \nonumber \\
-&\qquad+ \frac{3}{2} \hat{S}_{i,p} \\
+&\qquad+ \frac{3 \hat{n}_e \hat{m}_e \hat{\nu}_{ei}}{\hat{m}_i} \left({\hat{T}_e - \hat{T}_i}\right) + \frac{3}{2} \hat{S}_{i,p} \\
 \end{align}
 ```
 

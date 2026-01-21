@@ -4994,7 +4994,7 @@ const get_variable_funcs = Dict{String,Any}(
                     energy_equation!(dummy, fvec, moments, fields, run_info.collisions, 0.0,
                                      run_info.z_spectral, run_info.composition,
                                      run_info.geometry, run_info.external_source_settings.ion,
-                                     run_info.num_diss_params)
+                                     run_info.num_diss_params, run_info.vperp)
                 end
             end
             get_dp_dt!(variable, all_moments)
@@ -5039,11 +5039,11 @@ const get_variable_funcs = Dict{String,Any}(
                                               moments.ion.dens, moments.ion.upar,
                                               moments.ion.p, moments.neutral.dens,
                                               moments.neutral.uz, moments.neutral.p,
-                                              moments.electron, run_info.collisions, 0.0,
+                                              moments, run_info.collisions, 0.0,
                                               run_info.composition,
                                               run_info.external_source_settings.electron,
                                               run_info.num_diss_params, run_info.r,
-                                              run_info.z)
+                                              run_info.z, run_info.vperp)
                 end
             end
             get_electron_dp_dt!(variable, all_moments)
@@ -5353,6 +5353,16 @@ const get_variable_funcs = Dict{String,Any}(
                 variable = @. qpar + 0.75*n*vth^2*upar + 0.5*n*upar^3
             end
             return variable
+        end,
+    "electron_ion_energy_exchange" => (run_info; kwargs...) -> begin
+            me = run_info.composition.me_over_mi
+            nu_ei = get_variable(run_info, "collision_frequency_ei"; kwargs...)
+            electron_density = get_variable(run_info, "electron_density"; kwargs...)
+            electron_p = get_variable(run_info, "electron_p"; kwargs...)
+            T_i = get_variable(run_info, "temperature"; kwargs...)
+            # Although T_i has an extra (species) dimension, Julia's broadcasting rules
+            # will correctly handle combining these variables.
+            variable = @. 3.0 * me * nu_ei * (electron_p - T_i * electron_density)
         end,
     "total_energy_flux_neutral" => (run_info; kwargs...) -> begin
             if run_info.vzeta.n > 1 || run_info.vr.n > 1

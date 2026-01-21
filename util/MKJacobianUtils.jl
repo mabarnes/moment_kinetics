@@ -197,6 +197,7 @@ function get_electron_Jacobian_matrix(run_directory; restart_time_index=1,
     dvth_dz = @view moments.electron.dvth_dz[:,ir]
     dqpar_dz = @view moments.electron.dqpar_dz[:,ir]
     upar_ion = @view moments.ion.upar[:,ir,1]
+    T_ion = @view moments.ion.temp[:,ir,1]
     phi = @view fields.phi[:,ir]
 
     z_advect = advect_objects.z_advect
@@ -278,14 +279,15 @@ function get_electron_Jacobian_matrix(run_directory; restart_time_index=1,
         sub_terms = get_electron_sub_terms(dens, ddens_dz, upar, dupar_dz, p, dp_dz,
                                            dvth_dz, zeroth_moment, first_moment,
                                            second_moment, third_moment, dthird_moment_dz,
-                                           dqpar_dz, upar_ion, f, dpdf_dz, dpdf_dvpa,
-                                           d2pdf_dvpa2, me, moments, collisions,
-                                           composition, external_source_settings,
-                                           num_diss_params, t_params.electron, ion_dt, z,
-                                           vperp, vpa, z_speed, vpa_speed, ir,
-                                           separate_zeroth_moment, separate_first_moment,
-                                           separate_second_moment, separate_third_moment,
-                                           separate_dp_dz, separate_dq_dz)
+                                           dqpar_dz, upar_ion, T_ion, f, dpdf_dz,
+                                           dpdf_dvpa, d2pdf_dvpa2, me, moments,
+                                           collisions, composition,
+                                           external_source_settings, num_diss_params,
+                                           t_params.electron, ion_dt, z, vperp, vpa,
+                                           z_speed, vpa_speed, ir, separate_zeroth_moment,
+                                           separate_first_moment, separate_second_moment,
+                                           separate_third_moment, separate_dp_dz,
+                                           separate_dq_dz)
 
         terms = NullTerm()
 

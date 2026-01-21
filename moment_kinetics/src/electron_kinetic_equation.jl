@@ -219,10 +219,10 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments,
                                   moments.electron.dens, moments.electron.upar,
                                   moments.electron.p, moments.ion.dens,
                                   moments.ion.upar, moments.ion.p, moments.neutral.dens,
-                                  moments.neutral.uz, moments.neutral.p, moments.electron,
+                                  moments.neutral.uz, moments.neutral.p, moments,
                                   collisions, ion_dt, composition,
                                   external_source_settings.electron, num_diss_params, r,
-                                  z)
+                                  z, vperp)
     end
 
     if !evolve_p
@@ -574,9 +574,9 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments,
                                   moments.electron.upar, moments.electron.ppar,
                                   moments.ion.dens, moments.ion.upar, moments.ion.p,
                                   moments.neutral.dens, moments.neutral.uz,
-                                  moments.neutral.pz, moments.electron, collisions,
-                                  ion_dt, composition, external_source_settings.electron,
-                                  num_diss_params, r, z)
+                                  moments.neutral.pz, moments, collisions, ion_dt,
+                                  composition, external_source_settings.electron,
+                                  num_diss_params, r, z, vperp)
 
         calculate_electron_moments!((density=moments.ion.dens, upar=moments.ion.upar,
                                      electron_density=moments.electron.dens,
@@ -2311,9 +2311,9 @@ to allow the outer r-loop to be parallelised.
     electron_energy_equation!(electron_p_out, fvec_in.density, fvec_in.electron_p,
                               fvec_in.density, fvec_in.electron_upar, fvec_in.density,
                               fvec_in.upar, fvec_in.p, fvec_in.density_neutral,
-                              fvec_in.uz_neutral, fvec_in.pz_neutral, moments.electron,
-                              collisions, ion_dt, composition,
-                              external_source_settings.electron, num_diss_params, r, z)
+                              fvec_in.uz_neutral, fvec_in.pz_neutral, moments, collisions,
+                              ion_dt, composition, external_source_settings.electron,
+                              num_diss_params, r, z, vperp)
 
     newton_success = false
     @begin_r_anyzv_region()
@@ -4812,8 +4812,8 @@ only. This allows `result_object` to be (possibly) passed to
                    moments.ion.dens[:,ir,:], moments.ion.upar[:,ir,:],
                    moments.ion.p[:,ir,:], moments.neutral.dens[:,ir,:],
                    moments.neutral.uz[:,ir,:], moments.neutral.pz[:,ir,:],
-                   moments.electron, collisions, dt, composition,
-                   external_source_settings.electron, num_diss_params, z, ir;
+                   moments, collisions, dt, composition,
+                   external_source_settings.electron, num_diss_params, z, vperp, ir;
                    ion_dt=ion_dt)
 
         update_derived_electron_moment_time_derivatives!(p_in, moments,
@@ -4890,6 +4890,7 @@ function get_electron_sub_terms(
              dthird_moment_dz_array::AbstractVector{mk_float},
              dq_dz_array::AbstractVector{mk_float},
              upar_ion_array::AbstractVector{mk_float},
+             T_ion_array::AbstractVector{mk_float},
              pdf_array::AbstractArray{mk_float,3},
              dpdf_dz_array::AbstractArray{mk_float,3},
              dpdf_dvpa_array::AbstractArray{mk_float,3},
@@ -4953,6 +4954,7 @@ function get_electron_sub_terms(
               * "`get_electron_energy_equation_term()`.")
     end
     u_ion = ConstantTerm(upar_ion_array; z=z)
+    T_ion = ConstantTerm(T_ion_array; z=z)
 
     if include ∈ (:explicit_z, :explicit_v)
         f = ConstantTerm(pdf_array; vpa=vpa, vperp=vperp, z=z)
@@ -5108,6 +5110,8 @@ function get_electron_sub_terms(
         Maxwellian_prefactor = 1.0 / π^1.5
     end
 
+    ion_electron_energy_exchange = collisions.ion_electron_energy_exchange
+
     return ElectronSubTerms(; me, vpa_dissipation_coefficient, constraint_forcing_rate,
                             ion_dt, n, dn_dz, u, du_dz, p, dp_dz, dp_dz_constraint_rhs,
                             vth, dvth_dz, ppar, dppar_dz, zeroth_moment,
@@ -5115,11 +5119,12 @@ function get_electron_sub_terms(
                             first_moment_constraint_rhs, second_moment,
                             second_moment_constraint_rhs, third_moment, dthird_moment_dz,
                             third_moment_constraint_rhs, dq_dz, dq_dz_constraint_rhs,
-                            u_ion, wperp, wpa, f, df_dz, df_dvpa, d2f_dvpa2, source_type,
-                            source_amplitude, source_T_array, density_source,
+                            u_ion, T_ion, wperp, wpa, f, df_dz, df_dvpa, d2f_dvpa2,
+                            source_type, source_amplitude, source_T_array, density_source,
                             momentum_source, pressure_source, source_vth_factor,
                             source_this_vth_factor, collisions, nuee0, nuei0,
-                            krook_adjust_vth_1V, krook_adjust_1V, Maxwellian_prefactor)
+                            krook_adjust_vth_1V, krook_adjust_1V, Maxwellian_prefactor,
+                            ion_electron_energy_exchange)
 end
 
 function get_electron_sub_terms_z_only_Jacobian(
@@ -5136,6 +5141,7 @@ function get_electron_sub_terms_z_only_Jacobian(
              dthird_moment_dz_array::AbstractVector{mk_float},
              dq_dz_array::AbstractVector{mk_float},
              upar_ion_array::AbstractVector{mk_float},
+             T_ion_array::AbstractVector{mk_float},
              pdf_array::AbstractVector{mk_float},
              dpdf_dz_array::AbstractVector{mk_float},
              dpdf_dvpa_array::AbstractVector{mk_float},
@@ -5153,8 +5159,10 @@ function get_electron_sub_terms_z_only_Jacobian(
                         :Maxwellian_prefactor)
         vector_terms = (:source_amplitude, :source_T_array, :density_source,
                         :momentum_source, :pressure_source, :source_vth_factor)
+        bool_terms = (:ion_electron_energy_exchange,)
         return ElectronSubTerms(; (f ∈ scalar_terms ? f=>1.0 :
                                    f ∈ vector_terms ? f=>mk_float[] :
+                                   f ∈ bool_terms ? f=>false :
                                    f === :collisions ? f=>nothing :
                                    f === :source_type ? f=>String[] :
                                    f=>NullTerm()
@@ -5178,6 +5186,7 @@ function get_electron_sub_terms_z_only_Jacobian(
               * "`get_electron_energy_equation_term()`.")
     end
     u_ion = ConstantTerm(upar_ion_array; z=z)
+    T_ion = ConstantTerm(T_ion_array; z=z)
 
     f = EquationTerm(:electron_pdf, pdf_array; z=z)
     df_dz = EquationTerm(:electron_pdf, dpdf_dz_array; derivatives=[:z],
@@ -5244,6 +5253,8 @@ function get_electron_sub_terms_z_only_Jacobian(
         Maxwellian_prefactor = 1.0 / π^1.5
     end
 
+    ion_electron_energy_exchange = collisions.ion_electron_energy_exchange
+
     return ElectronSubTerms(; me, vpa_dissipation_coefficient, constraint_forcing_rate,
                             ion_dt, n, dn_dz, u, du_dz, p, dp_dz, dp_dz_constraint_rhs,
                             vth, dvth_dz, ppar, dppar_dz, zeroth_moment,
@@ -5251,11 +5262,12 @@ function get_electron_sub_terms_z_only_Jacobian(
                             first_moment_constraint_rhs, second_moment,
                             second_moment_constraint_rhs, third_moment, dthird_moment_dz,
                             third_moment_constraint_rhs, dq_dz, dq_dz_constraint_rhs,
-                            u_ion, wperp, wpa, f, df_dz, df_dvpa, d2f_dvpa2, source_type,
-                            source_amplitude, source_T_array, density_source,
+                            u_ion, T_ion, wperp, wpa, f, df_dz, df_dvpa, d2f_dvpa2,
+                            source_type, source_amplitude, source_T_array, density_source,
                             momentum_source, pressure_source, source_vth_factor,
                             source_this_vth_factor, collisions, nuee0, nuei0,
-                            krook_adjust_vth_1V, krook_adjust_1V, Maxwellian_prefactor)
+                            krook_adjust_vth_1V, krook_adjust_1V, Maxwellian_prefactor,
+                            ion_electron_energy_exchange)
 end
 
 function get_electron_sub_terms_v_only_Jacobian(
@@ -5267,7 +5279,7 @@ function get_electron_sub_terms_v_only_Jacobian(
              second_moment_array::AbstractArray{mk_float,0},
              third_moment_array::AbstractArray{mk_float,0},
              dthird_moment_dz::mk_float, dq_dz_array::AbstractArray{mk_float,0},
-             u_ion::mk_float, pdf_array::AbstractMatrix{mk_float},
+             u_ion::mk_float, T_ion::mk_float, pdf_array::AbstractMatrix{mk_float},
              dpdf_dz_array::AbstractMatrix{mk_float},
              dpdf_dvpa_array::AbstractMatrix{mk_float},
              d2pdf_dvpa2_array::Union{AbstractMatrix{mk_float},Nothing}, me::mk_float,
@@ -5367,6 +5379,8 @@ function get_electron_sub_terms_v_only_Jacobian(
     # it is, because `add_term_to_Jacobian()` does not know about `iz`.
     z_speed = get_ADI_boundary_v_solve_z_speed(z_speed, z, iz)
 
+    ion_electron_energy_exchange = collisions.ion_electron_energy_exchange
+
     return ElectronSubTerms(; me, vpa_dissipation_coefficient, constraint_forcing_rate,
                             ion_dt, n, dn_dz, u, du_dz, p, dp_dz, dp_dz_constraint_rhs,
                             vth, dvth_dz, ppar, dppar_dz, zeroth_moment,
@@ -5374,12 +5388,12 @@ function get_electron_sub_terms_v_only_Jacobian(
                             first_moment_constraint_rhs, second_moment,
                             second_moment_constraint_rhs, third_moment, dthird_moment_dz,
                             third_moment_constraint_rhs, dq_dz, dq_dz_constraint_rhs,
-                            u_ion, wperp, wpa, f, df_dz, df_dvpa, d2f_dvpa2, source_type,
-                            source_amplitude, source_T_array, density_source,
+                            u_ion, T_ion, wperp, wpa, f, df_dz, df_dvpa, d2f_dvpa2,
+                            source_type, source_amplitude, source_T_array, density_source,
                             momentum_source, pressure_source, source_vth_factor,
                             source_this_vth_factor, collisions, nuee0, nuei0,
                             krook_adjust_vth_1V, krook_adjust_1V,
-                            Maxwellian_prefactor), z_speed
+                            Maxwellian_prefactor, ion_electron_energy_exchange), z_speed
 end
 
 """
@@ -5455,6 +5469,7 @@ in the time derivative term as it is for the non-boundary points.]
     dvth_dz = @view moments.electron.dvth_dz[:,ir]
 
     upar_ion = @view moments.ion.upar[:,ir,1]
+    T_ion = @view moments.ion.temp[:,ir,1]
 
     # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
     third_moment = @view scratch_dummy.buffer_zrs_1[:,ir,1]
@@ -5536,10 +5551,11 @@ in the time derivative term as it is for the non-boundary points.]
     sub_terms = get_electron_sub_terms(dens, ddens_dz, upar, dupar_dz, p, dp_dz, dvth_dz,
                                        zeroth_moment, first_moment, second_moment,
                                        third_moment, dthird_moment_dz, dqpar_dz, upar_ion,
-                                       f, dpdf_dz, dpdf_dvpa, d2pdf_dvpa2, me, moments,
-                                       collisions, composition, external_source_settings,
-                                       num_diss_params, t_params, ion_dt, z, vperp, vpa,
-                                       z_speed, vpa_speed, ir, separate_zeroth_moment,
+                                       T_ion, f, dpdf_dz, dpdf_dvpa, d2pdf_dvpa2, me,
+                                       moments, collisions, composition,
+                                       external_source_settings, num_diss_params,
+                                       t_params, ion_dt, z, vperp, vpa, z_speed,
+                                       vpa_speed, ir, separate_zeroth_moment,
                                        separate_first_moment, separate_second_moment,
                                        separate_third_moment, separate_dp_dz,
                                        separate_dq_dz, include;
@@ -5609,6 +5625,7 @@ equation.
     dqpar_dz = @view(moments.electron.dqpar_dz[iz,ir])
 
     upar_ion = moments.ion.upar[iz,ir,1]
+    T_ion = moments.ion.temp[iz,ir,1]
 
     if add_identity
         jacobian_initialize_identity!(jacobian)
@@ -5618,9 +5635,10 @@ equation.
 
     sub_terms, this_z_speed = get_electron_sub_terms_v_only_Jacobian(
         dens, ddens_dz, upar, dupar_dz, p, dp_dz, dvth_dz, zeroth_moment, first_moment,
-        second_moment, third_moment, dthird_moment_dz, dqpar_dz, upar_ion, f, dpdf_dz,
-        dpdf_dvpa, d2pdf_dvpa2, me, moments, collisions, external_source_settings,
-        num_diss_params, t_params, ion_dt, z, vperp, vpa, z_speed, vpa_speed, ir, iz)
+        second_moment, third_moment, dthird_moment_dz, dqpar_dz, upar_ion, T_ion, f,
+        dpdf_dz, dpdf_dvpa, d2pdf_dvpa2, me, moments, collisions,
+        external_source_settings, num_diss_params, t_params, ion_dt, z, vperp, vpa,
+        z_speed, vpa_speed, ir, iz)
     pdf_terms, p_terms = get_all_electron_terms(sub_terms)
 
     add_term_to_Jacobian!(jacobian, :electron_pdf, dt, pdf_terms, this_z_speed)
@@ -5675,6 +5693,7 @@ ADI method for the electron kinetic equation.
     dqpar_dz = @view moments.electron.dqpar_dz[:,ir]
 
     upar_ion = @view moments.ion.upar[:,ir,1]
+    T_ion = @view moments.ion.temp[:,ir,1]
 
     if add_identity
         jacobian_initialize_identity!(jacobian)
@@ -5684,9 +5703,10 @@ ADI method for the electron kinetic equation.
 
     sub_terms = @views get_electron_sub_terms_z_only_Jacobian(
         dens, ddens_dz, upar, dupar_dz, p, dp_dz, dvth_dz, zeroth_moment, first_moment,
-        second_moment, third_moment, dthird_moment_dz, dqpar_dz, upar_ion, f, dpdf_dz,
-        dpdf_dvpa, d2pdf_dvpa2, me, moments, collisions, external_source_settings,
-        num_diss_params, t_params, ion_dt, z, vperp, vpa, z_speed, ir, ivperp, ivpa)
+        second_moment, third_moment, dthird_moment_dz, dqpar_dz, upar_ion, T_ion, f,
+        dpdf_dz, dpdf_dvpa, d2pdf_dvpa2, me, moments, collisions,
+        external_source_settings, num_diss_params, t_params, ion_dt, z, vperp, vpa,
+        z_speed, ir, ivperp, ivpa)
     pdf_terms, p_terms = get_all_electron_terms(sub_terms)
 
     add_term_to_Jacobian!(jacobian, :electron_pdf, dt, pdf_terms, z_speed)
@@ -5734,6 +5754,7 @@ z-direction solve part of the ADI method for the electron energy equation.
     dqpar_dz = @view moments.electron.dqpar_dz[:,ir]
 
     upar_ion = @view moments.ion.upar[:,ir]
+    T_ion = @view moments.ion.temp[:,ir]
 
     if add_identity
         jacobian_initialize_identity!(jacobian)
@@ -5748,9 +5769,10 @@ z-direction solve part of the ADI method for the electron energy equation.
 
     sub_terms = @views get_electron_sub_terms_z_only_Jacobian(
         dens, ddens_dz, upar, dupar_dz, p, dp_dz, dvth_dz, zeroth_moment, first_moment,
-        second_moment, third_moment, dthird_moment_dz, dqpar_dz, upar_ion, f, dpdf_dz,
-        dpdf_dvpa, d2pdf_dvpa2, me, moments, collisions, external_source_settings,
-        num_diss_params, t_params, ion_dt, z, vperp, vpa, z_speed, ir, 1, 1)
+        second_moment, third_moment, dthird_moment_dz, dqpar_dz, upar_ion, T_ion, f,
+        dpdf_dz, dpdf_dvpa, d2pdf_dvpa2, me, moments, collisions,
+        external_source_settings, num_diss_params, t_params, ion_dt, z, vperp, vpa,
+        z_speed, ir, 1, 1)
     pdf_terms, p_terms = get_all_electron_terms(sub_terms)
 
     add_term_to_Jacobian!(jacobian, :electron_p, dt, p_terms, z_speed)

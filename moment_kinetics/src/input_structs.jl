@@ -634,7 +634,8 @@ end
 Collisions input struct to contain all the different collisions substructs and overall 
 collision input parameters.
 """
-struct collisions_input
+Base.@kwdef struct collisions_input
+    ion_electron_energy_exchange::Bool
     # atomic reaction parameters
     reactions::reactions
     # electron fluid collision parameters

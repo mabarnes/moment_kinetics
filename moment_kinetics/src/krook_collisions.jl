@@ -32,7 +32,7 @@ function setup_krook_collisions_input(toml_input::AbstractDict, warn_unexpected:
     nuee_krook_default = get_reference_collision_frequency_ee(reference_params)
     nuei_krook_default = get_reference_collision_frequency_ei(reference_params)
     # read the input toml and specify a sensible default    
-    input_section = input_section = set_defaults_and_check_section!(
+    input_section = set_defaults_and_check_section!(
         toml_input, "krook_collisions", warn_unexpected;
         # begin default inputs (as kwargs)
         use_krook = false,
@@ -66,7 +66,6 @@ function setup_krook_collisions_input(toml_input::AbstractDict, warn_unexpected:
         input_section["nuei0"] = -1.0
     end
     input = OrderedDict(Symbol(k)=>v for (k,v) in input_section)
-    #println(input)
     return krook_collisions_input(; input...)
 end
 

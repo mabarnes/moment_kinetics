@@ -6,6 +6,8 @@ export energy_equation!
 export neutral_energy_equation!
 
 using ..calculus: derivative!
+using ..collision_frequencies
+using ..input_structs
 using ..looping
 using ..timer_utils
 
@@ -15,7 +17,7 @@ evolve the parallel pressure by solving the energy equation
 @timeit global_timer energy_equation!(
                          p_out, fvec, moments, fields, collisions, dt, spectral,
                          composition, geometry, ion_source_settings,
-                         num_diss_params) = begin
+                         num_diss_params, vperp) = begin
 
     @begin_s_r_z_region()
 
@@ -24,6 +26,8 @@ evolve the parallel pressure by solving the energy equation
     p = fvec.p
     ppar = moments.ion.ppar
     pperp = moments.ion.pperp
+    vth = moments.ion.vth
+    T = moments.ion.temp
     dupar_dz = moments.ion.dupar_dz
     dp_dr_upwind = moments.ion.dp_dr_upwind
     dp_dz_upwind = moments.ion.dp_dz_upwind
@@ -48,6 +52,25 @@ evolve the parallel pressure by solving the energy equation
                                                  + bz[iz,ir] * dBdz[iz,ir] * qpar[iz,ir,is]))
     end
 
+    if collisions.ion_electron_energy_exchange &&
+            composition.electron_physics ∉ (boltzmann_electron_response,
+                                            boltzmann_electron_response_with_simple_sheath)
+        electron_density = moments.electron.dens
+        electron_vth = moments.electron.vth
+        me = composition.me_over_mi
+        electron_p = fvec.electron_p
+        if vperp.n == 1
+            adjust_vth = sqrt(3.0)
+        else
+            adjust_vth = 1.0
+        end
+        @loop_s_r_z is ir iz begin
+            nu_ei = get_collision_frequency_ei(collisions, density[iz,ir,is],
+                                               adjust_vth * electron_vth[iz,ir])
+            dp_dt[iz,ir,is] += 2.0 * me * nu_ei * (electron_p[iz,ir]
+                                                   - T[iz,ir,is] * electron_density[iz,ir])
+        end
+    end
 
     for index ∈ eachindex(ion_source_settings)
         if ion_source_settings[index].active

@@ -74,7 +74,7 @@ The energy equation is similar to [the ion one](@ref "Ion moment equations")
 &\quad= -E_\mathrm{ioniz} n_e n_n R_\mathrm{ioniz}
         + \int \frac{1}{2} m_e |\boldsymbol{v} - u_{e\parallel} \hat{\boldsymbol{z}}|^2 C_{ei} d^3 v
         + \int \frac{1}{2} m_e |\boldsymbol{v} - u_{e\parallel} \hat{\boldsymbol{z}}|^2 C_{en} d^3 v \nonumber \\
-&\qquad + \frac{3}{2} S_{e,p} \\
+&\qquad + \frac{3 n_e m_e \nu_{ei}}{m_i}\left(T_i - T_e\right) + \frac{3}{2} S_{e,p} \\
 
 &\frac{3}{2} \frac{\partial p_e}{\partial t}
 + \frac{\partial q_{e\parallel}}{\partial z}
@@ -84,11 +84,15 @@ The energy equation is similar to [the ion one](@ref "Ion moment equations")
 &\quad= -E_\mathrm{ioniz} n_e n_n R_\mathrm{ioniz}
         + 3 n_e \frac{m_e}{m_i} \nu_{ei} \left( T_i - T_e \right)
         + m_e n_e \nu_{ei} \left( u_{i\parallel} - u_{e_\parallel} \right)^2 \nonumber \\
-&\qquad + \frac{3}{2} S_{e,p} \\
+&\qquad + \frac{3 n_e m_e \nu_{ei}}{m_i}\left(T_i - T_e\right) + \frac{3}{2} S_{e,p} \\
 \end{align}
 ```
 To get the second version we treat the collision operators as described in
 [Electron collisions](@ref).
+The energy exchange term $\frac{3 n_e m_e \nu_{ei}}{m_i}\left(T_i - T_e\right)$
+is a simplified form, using the value given by colliding two Maxwellian
+distributions (see report TN-07 "2D drift kinetic model with wall boundary
+conditions").
 
 Electron collisions
 -------------------
@@ -230,7 +234,7 @@ becomes
 &\quad= -E_\mathrm{ioniz} n_e n_n R_\mathrm{ioniz}
         + \int \frac{1}{2} m_e (v_\parallel - u_{e\parallel})^2 \bar{C}_{ei} dv_\parallel
         + \int \frac{1}{2} m_e (v_\parallel - u_{e\parallel})^2 \bar{C}_{en} dv_\parallel \nonumber \\
-&\qquad + \frac{3}{2} S_{e,p} \\
+&\qquad + \frac{3 n_e m_e \nu_{ei}}{m_i}\left(T_i - T_e\right) + \frac{3}{2} S_{e,p} \\
 
 &\frac{3}{2} \frac{\partial p_e}{\partial t}
 + \frac{\partial q_{e\parallel}}{\partial z}
@@ -240,7 +244,7 @@ becomes
 &\quad= -E_\mathrm{ioniz} n_e n_n R_\mathrm{ioniz}
         + 3 n_e \frac{m_e}{m_i} \nu_{ei} \left( T_i - T_e \right)
         + m_e n_e \nu_{ei} \left( u_{i\parallel} - u_{e_\parallel} \right)^2 \nonumber \\
-&\qquad + \frac{3}{2} S_{e,p} \\
+&\qquad + \frac{3 n_e m_e \nu_{ei}}{m_i}\left(T_i - T_e\right) + \frac{3}{2} S_{e,p} \\
 \end{align}
 ```
 
@@ -321,7 +325,7 @@ The moment equations become
 &\quad= -\hat{E}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \hat{R}_\mathrm{ioniz}
         + \int \frac{1}{2} \hat{m}_e |\hat{\boldsymbol{v}} - \hat{u}_{e\parallel} \hat{\boldsymbol{z}}|^2 \hat{C}_{ei} d^3 v
         + \int \frac{1}{2} \hat{m}_e |\hat{\boldsymbol{v}} - \hat{u}_{e\parallel} \hat{\boldsymbol{z}}|^2 \hat{C}_{en} d^3 v \nonumber \\
-&\qquad + \frac{3}{2} \hat{S}_{e,p} \\
+&\qquad + \frac{3 \hat{n}_e \hat{m}_e \hat{\nu}_{ei}}{\hat{m}_i}\left(\hat{T}_i - \hat{T}_e\right) + \frac{3}{2} \hat{S}_{e,p} \\
 
 &\frac{3}{2} \frac{\partial \hat{p}_e}{\partial \hat{t}}
 + \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}}
@@ -331,7 +335,7 @@ The moment equations become
 &\quad= -\hat{E}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \hat{R}_\mathrm{ioniz}
         + 3 \hat{n}_e \frac{\hat{m}_e}{\hat{m}_i} \hat{\nu}_{ei} \left( \hat{T}_i - \hat{T}_e \right)
         + \hat{m}_e \hat{n}_e \hat{\nu}_{ei} \left( \hat{u}_{i\parallel} - \hat{u}_{e_\parallel} \right)^2 \nonumber \\
-&\qquad + \frac{3}{2} \hat{S}_{e,p} \\
+&\qquad + \frac{3 \hat{n}_e \hat{m}_e \hat{\nu}_{ei}}{\hat{m}_i}\left(\hat{T}_i - \hat{T}_e\right) + \frac{3}{2} \hat{S}_{e,p} \\
 \end{align}
 ```
 
@@ -391,7 +395,7 @@ In 1D1V the dimsionless energy equation is
 &\quad= -\hat{E}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \hat{R}_\mathrm{ioniz}
         + \int \frac{1}{2} \hat{m}_e (\hat{v}_\parallel - \hat{u}_{e\parallel})^2 \hat{\bar{C}}_{ei} d\hat{v}_\parallel
         + \int \frac{1}{2} \hat{m}_e (\hat{v}_\parallel - \hat{u}_{e\parallel})^2 \hat{\bar{C}}_{en} d\hat{v}_\parallel \nonumber \\
-&\qquad + \frac{3}{2} \hat{\bar{S}}_{e,p} \\
+&\qquad + \frac{3 \hat{n}_e \hat{m}_e \hat{\nu}_{ei}}{\hat{m}_i}\left(\hat{T}_i - \hat{T}_e\right) + \frac{3}{2} \hat{\bar{S}}_{e,p} \\
 
 &\frac{3}{2} \frac{\partial \hat{p}_e}{\partial \hat{t}}
 + \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}}
@@ -401,7 +405,7 @@ In 1D1V the dimsionless energy equation is
 &\quad= -\hat{E}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \hat{R}_\mathrm{ioniz}
         + 3 \hat{n}_e \frac{\hat{m}_e}{\hat{m}_i} \hat{\nu}_{ei} \left( \hat{T}_i - \hat{T}_e \right)
         + \hat{m}_e \hat{n}_e \hat{\nu}_{ei} \left( \hat{u}_{i\parallel} - \hat{u}_{e_\parallel} \right)^2 \nonumber \\
-&\qquad + \frac{3}{2} \hat{\bar{S}}_{e,p} \\
+&\qquad + \frac{3 \hat{n}_e \hat{m}_e \hat{\nu}_{ei}}{\hat{m}_i}\left(\hat{T}_i - \hat{T}_e\right) + \frac{3}{2} \hat{\bar{S}}_{e,p} \\
 \end{align}
 ```
 

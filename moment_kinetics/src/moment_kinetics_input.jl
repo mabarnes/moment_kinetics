@@ -151,6 +151,12 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
 
     manufactured_solns_input = setup_manufactured_solutions(input_dict, warn_unexpected)
 
+    collisions_input_tuple = Dict_to_NamedTuple(
+        set_defaults_and_check_section!(
+            input_dict, "collisions", warn_unexpected;
+            ion_electron_energy_exchange = true,
+           )
+       )
     reactions_input = set_defaults_and_check_section!(
         input_dict, reactions, warn_unexpected
        )
@@ -166,8 +172,10 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
     # write total collision struct using the structs above, as each setup function 
     # for the collisions outputs itself a struct of the type of collision, which
     # is a substruct of the overall collisions_input struct.
-    collisions = collisions_input(reactions_input, electron_fluid_collisions_input,
-                                  krook_input, fkpl_input, mxwl_diff_input)
+    collisions = collisions_input(; collisions_input_tuple..., reactions=reactions_input,
+                                  electron_fluid=electron_fluid_collisions_input,
+                                  krook=krook_input, fkpl=fkpl_input,
+                                  mxwl_diff=mxwl_diff_input)
 
     num_diss_params = setup_numerical_dissipation(input_dict, warn_unexpected)
 

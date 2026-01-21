@@ -1003,6 +1003,14 @@ function _setup_time_advance_internal!(pdf, fields, vz, vr, vzeta, vpa, vperp, z
     ion_mom_diss_coeff = num_diss_params.ion.moment_dissipation_coefficient
     electron_mom_diss_coeff = num_diss_params.electron.moment_dissipation_coefficient
     neutral_mom_diss_coeff = num_diss_params.neutral.moment_dissipation_coefficient
+    r_advect = advection_structs.r_advect
+    alpha_advect = advection_structs.alpha_advect
+    z_advect = advection_structs.z_advect
+    vperp_advect = advection_structs.vperp_advect
+    vpa_advect = advection_structs.vpa_advect
+    neutral_r_advect = advection_structs.neutral_r_advect
+    neutral_z_advect = advection_structs.neutral_z_advect
+    neutral_vz_advect = advection_structs.neutral_vz_advect
 
     # create the 'advance' struct to be used in later Euler advance to
     # indicate which parts of the equations are to be advanced concurrently.
@@ -1148,6 +1156,9 @@ function _setup_time_advance_internal!(pdf, fields, vz, vr, vzeta, vpa, vperp, z
             # until after the electrons are initialised.
             fields.phi .= 0.0
         end
+        update_derived_moments!(scratch[1], moments, vpa, vperp, z, r, composition,
+                                r_spectral, geometry, gyroavs, scratch_dummy, z_advect,
+                                collisions, false)
         initialize_electrons!(pdf, moments, fields, geometry, composition, r, z,
                               vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
                               vperp_spectral, vpa_spectral, collisions, gyroavs,
@@ -1186,14 +1197,6 @@ function _setup_time_advance_internal!(pdf, fields, vz, vr, vzeta, vpa, vperp, z
     calculate_neutral_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, 
                                           neutral_mom_diss_coeff)
 
-    r_advect = advection_structs.r_advect
-    alpha_advect = advection_structs.alpha_advect
-    z_advect = advection_structs.z_advect
-    vperp_advect = advection_structs.vperp_advect
-    vpa_advect = advection_structs.vpa_advect
-    neutral_r_advect = advection_structs.neutral_r_advect
-    neutral_z_advect = advection_structs.neutral_z_advect
-    neutral_vz_advect = advection_structs.neutral_vz_advect
     ##
     # ion particle advection only
     ##
@@ -1397,6 +1400,9 @@ function _setup_time_advance_internal!(pdf, fields, vz, vr, vzeta, vpa, vperp, z
             scratch[t_params.n_rk_stages+1].uz_neutral[iz,ir,isn] = moments.neutral.uz[iz,ir,isn]
             scratch[t_params.n_rk_stages+1].p_neutral[iz,ir,isn] = moments.neutral.p[iz,ir,isn]
         end
+    else
+        update_moments!(moments, pdf.ion.norm, gyroavs, vpa, vperp, z, r, composition,
+                        r_spectral,geometry,scratch_dummy,z_advect, collisions)
     end
 
     # calculate the electron-ion parallel friction force
@@ -3931,7 +3937,7 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
     if advance.energy
         energy_equation!(fvec_out.p, fvec_in, moments, fields, collisions, dt, z_spectral,
                          composition, geometry, external_source_settings.ion,
-                         num_diss_params)
+                         num_diss_params, vperp)
         write_debug_IO("energy_equation!")
     end
     if advance.neutral_continuity
@@ -3983,10 +3989,9 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
                                   fvec_in.electron_upar, moments.electron.ppar,
                                   fvec_in.density, fvec_in.upar, fvec_in.p,
                                   fvec_in.density_neutral, fvec_in.uz_neutral,
-                                  fvec_in.p_neutral, moments.electron, collisions, dt,
-                                  composition, external_source_settings.electron,
-                                  num_diss_params, r, z;
-                                  conduction=advance.electron_conduction)
+                                  fvec_in.p_neutral, moments, collisions, dt, composition,
+                                  external_source_settings.electron, num_diss_params, r,
+                                  z, vperp; conduction=advance.electron_conduction)
         @begin_r_anyzv_region()
         @loop_r ir begin
             update_derived_electron_moment_time_derivatives!(fvec_in.electron_p, moments,

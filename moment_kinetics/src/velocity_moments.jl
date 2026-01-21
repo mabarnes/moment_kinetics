@@ -634,7 +634,8 @@ function update_moments!(moments, ff_in, gyroavs::gyro_operators, vpa, vperp, z,
         end
     end
 
-    update_vth!(moments.ion.vth, moments.ion.p, moments.ion.dens, z, r, composition)
+    update_vth!(moments.ion.vth, moments.ion.temp, moments.ion.p, moments.ion.dens, z, r,
+                composition)
     # update the Chodura diagnostic -- note that the pdf should be the unnormalised one
     # so this will break for the split moments cases
     if composition.ion_physics != coll_krook_ions
@@ -984,14 +985,15 @@ function get_pperp(p, ppar)
     return 1.5 * p - 0.5 * ppar
 end
 
-function update_vth!(vth, p, dens, z, r, composition)
+function update_vth!(vth, temp, p, dens, z, r, composition)
     @debug_consistency_checks composition.n_ion_species == size(vth,3) || throw(BoundsError(vth))
     @debug_consistency_checks r.n == size(vth,2) || throw(BoundsError(vth))
     @debug_consistency_checks z.n == size(vth,1) || throw(BoundsError(vth))
 
     @begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
-        vth[iz,ir,is] = sqrt(2.0 * p[iz,ir,is] / dens[iz,ir,is])
+        temp[iz,ir,is] = p[iz,ir,is] / dens[iz,ir,is]
+        vth[iz,ir,is] = sqrt(2.0 * temp[iz,ir,is])
     end
 end
 
@@ -2516,8 +2518,8 @@ update velocity moments that are calculable from the evolved ion pdf
     end
     # update the thermal speed
     @begin_s_r_z_region()
-    update_vth!(moments.ion.vth, new_scratch.p, new_scratch.density, z, r,
-                composition)
+    update_vth!(moments.ion.vth, moments.ion.temp, new_scratch.p, new_scratch.density, z,
+                r, composition)
     # update the parallel heat flux
     update_ion_qpar!(moments.ion.qpar, moments.ion.qpar_updated, new_scratch.density,
                      new_scratch.upar, moments.ion.vth, moments.ion.dT_dz, ff, vpa, vperp,
