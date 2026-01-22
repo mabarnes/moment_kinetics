@@ -5508,15 +5508,17 @@ in the time derivative term as it is for the non-boundary points.]
     end
     vpa_speed = @view vpa_advect[:,:,:,ir]
 
-    d2pdf_dvpa2 = @view scratch_dummy.buffer_vpavperpzr_3[:,:,:,ir]
     # If not using electron vpa dissipation, the value of d2pdf_dvpa2 won't actually be
     # needed.
     if num_diss_params.electron.vpa_dissipation_coefficient > 0.0
+        d2pdf_dvpa2 = @view scratch_dummy.buffer_vpavperpzr_3[:,:,:,ir]
         @begin_anyzv_z_vperp_region()
         @loop_z_vperp iz ivperp begin
             @views second_derivative!(d2pdf_dvpa2[:,ivperp,iz], f[:,ivperp,iz], vpa,
                                       vpa_spectral)
         end
+    else
+        d2pdf_dvpa2 = nothing
     end
 
     zeroth_moment = @view scratch_dummy.buffer_zrs_3[:,ir,1]

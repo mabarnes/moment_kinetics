@@ -773,6 +773,17 @@ struct EquationTerm
     # The current value of this term, at `current_indices`, looked up from
     # `flattened_data`.
     current_value::Array{mk_float,0}
+
+    @debug_initialize_NaN begin
+        # Check there are no NaNs in the array when creating an EquationTerm.
+        function EquationTerm(args...)
+            et = new(args...)
+            if any(isnan.(et.flattened_data))
+                error("Found NaN when initialising EquationTerm.")
+            end
+            return et
+        end
+    end
 end
 
 # Need a wrapper to deal with debug features. `vec()` converts to `Array`, which is not
@@ -817,7 +828,7 @@ function NullTerm()
                         mk_int[], 1, Symbol(""), Symbol[], mk_int[], mk_int[],
                         Vector{mk_float}[], Symbol[], mk_int[], mk_int[], Symbol[],
                         nothing, mk_int[], mk_int[], mk_int[], nothing,
-                        Vector{mk_float}[], mk_int[], fill(mk_float(NaN), 1), mk_int[],
+                        Vector{mk_float}[], mk_int[], fill(mk_float(Inf), 1), mk_int[],
                         fill(mk_float(NaN)))
 end
 
