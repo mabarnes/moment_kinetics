@@ -82,6 +82,7 @@ const ion_moment_ddt_variables = ("ddens_dt", "dnupar_dt", "dupar_dt", "dp_dt", 
 const electron_moment_variables = ("electron_density", "electron_parallel_flow",
                                    "electron_pressure", "electron_parallel_pressure",
                                    "electron_thermal_speed", "electron_temperature",
+                                   "electron_parallel_temperature",
                                    "electron_parallel_heat_flux",
                                    "collision_frequency_ee", "collision_frequency_ei")
 const electron_moment_ddt_variables = ("electron_dp_dt", "electron_dvth_dt")
@@ -5302,6 +5303,12 @@ const get_variable_funcs = Dict{String,Any}(
     "electron_temperature" => (run_info; kwargs...) -> begin
             vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
             variable = 0.5 * run_info.composition.me_over_mi .* vth.^2
+            return variable
+        end,
+    "electron_parallel_temperature" => (run_info; kwargs...) -> begin
+            ppar = get_variable(run_info, "electron_parallel_pressure"; kwargs...)
+            n = get_variable(run_info, "electron_density"; kwargs...)
+            variable = ppar ./ n
             return variable
         end,
     "temperature_neutral" => (run_info; kwargs...) -> begin
