@@ -5280,13 +5280,23 @@ const get_variable_funcs = Dict{String,Any}(
     "collision_frequency_ee" => (run_info; kwargs...) -> begin
             n = get_variable(run_info, "electron_density"; kwargs...)
             vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
-            variable = get_collision_frequency_ee(run_info.collisions, n, vth)
+            if run_info.vperp.n == 1
+                Krook_vth = sqrt(3.0) * vth
+            else
+                Krook_vth = vth
+            end
+            variable = get_collision_frequency_ee(run_info.collisions, n, Krook_vth)
             return variable
         end,
     "collision_frequency_ei" => (run_info; kwargs...) -> begin
             n = get_variable(run_info, "electron_density"; kwargs...)
             vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
-            variable = get_collision_frequency_ei(run_info.collisions, n, vth)
+            if run_info.vperp.n == 1
+                Krook_vth = sqrt(3.0) * vth
+            else
+                Krook_vth = vth
+            end
+            variable = get_collision_frequency_ei(run_info.collisions, n, Krook_vth)
             return variable
         end,
     "electron_temperature" => (run_info; kwargs...) -> begin
