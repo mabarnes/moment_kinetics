@@ -1371,7 +1371,7 @@ end
 
     precon_p, precon_f = x
 
-    schur_complement_factorization, _, moments_buffer =
+    schur_complement_factorization, precon, moments_buffer =
         nl_solver_params.preconditioners[ir]
 
     # Apart from p, all moments are set by constraint equations that have zeros on the
@@ -1380,6 +1380,14 @@ end
     @begin_anyzv_z_region()
     @loop_z iz begin
         moments_buffer[iz] = precon_p[iz]
+    end
+    # Zero out the remaining entries, which correspond to moment constraints.
+    moment_size = length(precon_p)
+    for i ∈ 3:precon.n_entries
+        offset = i * moment_size
+        @loop_z iz begin
+            moments_buffer[iz+offset] = 0.0
+        end
     end
 
     @timeit_debug global_timer "ldiv!" ldiv!(schur_complement_factorization,
