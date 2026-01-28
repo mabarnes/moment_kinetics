@@ -1126,41 +1126,10 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
     else
         return nothing
     end
-    # Stangeby (25.2) suggests that, when including kinetic effects, a value
-    # for gamma_i of around 2.5 is sensible.
-    # However, maybe for the purposes of this coll_krook scan, at very high
-    # collisionality we expect the distribution function of the ions at the
-    # sheath entrance to be close to a drifting maxwellian, in which case
-    # the original Stangeby (2.92) would be more appropriate. However, this
-    # also depends on whether we're 1V or 2V - as in 1V gamma_i = 2.5, 
-    # in 2V gamma_i = 3.5.
 
     @loop_r ir begin
         for iz ∈ z_indices
-            this_p = Krook_vth[iz,ir]^2 * density[iz,ir] * 1/2
-            this_upar = upar[iz,ir]
-            this_dens = density[iz,ir]
-            particle_flux = this_dens * this_upar
-            T_i = 1/2 * Krook_vth[iz,ir]^2
-
-            if vperp.n == 1
-                gamma_i = 2 + T_e/(2 * T_i)
-                convective_coefficient = 1.5
-            else
-                gamma_i = 3.5
-                convective_coefficient = 2.5
-            end
-
-            # Stangeby (2.92)
-            total_heat_flux = gamma_i * T_i * particle_flux
-
-            # E.g. Helander&Sigmar (2.14), but in 1V we have no viscosity and only 3/2
-            # rather than 5/2.
-            conductive_heat_flux = total_heat_flux -
-                                   convective_coefficient * this_p * this_upar -
-                                   0.5 * this_dens * this_upar^3
-
-            qpar[iz,ir] = conductive_heat_flux
+            qpar[iz,ir] = 0.0
         end
     end
     return nothing
