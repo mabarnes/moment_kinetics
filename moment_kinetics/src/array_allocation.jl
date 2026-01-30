@@ -102,6 +102,8 @@ function allocate_shared_float(dims...; comm=nothing, maybe_debug=true)
             @debug_track_initialized begin
                 # Track initialization as if the array was not initialized to NaN
                 array.is_initialized .= false
+            end
+            @debug_shared_array begin
                 # Track usage as if this array has not been written
                 array.is_written .= false
             end
@@ -147,6 +149,10 @@ function allocate_shared_complex(dims...; comm=nothing, maybe_debug=true)
             @debug_track_initialized begin
                 # Track initialization as if the array was not initialized to NaN
                 array.is_initialized .= false
+            end
+            @debug_shared_array begin
+                # Track usage as if this array has not been written
+                array.is_written .= false
             end
         end
         if this_comm !== nothing
