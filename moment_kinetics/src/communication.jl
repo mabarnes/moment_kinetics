@@ -761,14 +761,14 @@ end
              name === :dim_names ?
              (:flattened_dim,) :
              name === :dim_ranges ?
-             (:,) :
+             (1:prod(length(r) for r ∈ A.dim_ranges),) :
              getfield(A, name)
              for name ∈ fieldnames(typeof(A)))...)
     end
 
     # Explicit overload to avoid array when using DebugMPISharedArray Y, B and
     # SparseArray A
-    import LinearAlgebra: ldiv!, Factorization
+    import LinearAlgebra: ldiv!, Factorization, lu, lu!
     function ldiv!(Y::DebugMPISharedArray, A::Factorization, B::DebugMPISharedArray)
         @debug_track_initialized begin
             Y.is_initialized .= 1
@@ -777,8 +777,45 @@ end
         Y.accessed[] = true
         return ldiv!(Y.data, A, B.data)
     end
+    function lu(A::DebugMPISharedArray)
+        @debug_track_initialized begin
+            if !all(A.is_initialized .== 1)
+                if A.creation_stack_trace != ""
+                    error("Shared memory array read at $I before being initialized. "
+                          * "Array was created at:\n"
+                          * A.creation_stack_trace)
+                else
+                    error("Shared memory array read at $I before being initialized. "
+                          * "Enable `debug_track_array_allocate_location` to track where "
+                          * "array was created.")
+                end
+            end
+        end
+        A.is_read .= true
+        A.accessed[] = true
+        return lu(A.data)
+    end
+    function lu!(A::DebugMPISharedArray)
+        @debug_track_initialized begin
+            if !all(A.is_initialized .== 1)
+                if A.creation_stack_trace != ""
+                    error("Shared memory array read at $I before being initialized. "
+                          * "Array was created at:\n"
+                          * A.creation_stack_trace)
+                else
+                    error("Shared memory array read at $I before being initialized. "
+                          * "Enable `debug_track_array_allocate_location` to track where "
+                          * "array was created.")
+                end
+            end
+        end
+        A.is_read .= true
+        A.is_written .= true
+        A.accessed[] = true
+        return lu!(A.data)
+    end
 
-    import MPI: Buffer
+    import MPI: Buffer, RBuffer
     function Buffer(A::DebugMPISharedArray)
         @debug_track_initialized begin
             A.is_initialized .= 1
@@ -787,6 +824,48 @@ end
         A.is_written .= true
         A.accessed[] = true
         return Buffer(A.data)
+    end
+    function RBuffer(senddata::DebugMPISharedArray, recvdata::DebugMPISharedArray)
+        @debug_track_initialized begin
+            senddata.is_initialized .= 1
+        end
+        senddata.is_read .= true
+        senddata.accessed[] = true
+        recvdata.is_written .= true
+        recvdata.accessed[] = true
+        return RBuffer(senddata.data, recvdata.data)
+    end
+    function RBuffer(senddata::AbstractArray, recvdata::DebugMPISharedArray)
+        recvdata.is_written .= true
+        recvdata.accessed[] = true
+        return RBuffer(senddata, recvdata.data)
+    end
+    function RBuffer(senddata::Ref, recvdata::DebugMPISharedArray)
+        recvdata.is_written .= true
+        recvdata.accessed[] = true
+        return RBuffer(senddata, recvdata.data)
+    end
+    function RBuffer(senddata::MPI.InPlace, recvdata::DebugMPISharedArray)
+        @debug_track_initialized begin
+            recvdata.is_initialized .= 1
+        end
+        recvdata.is_read .= true
+        recvdata.is_written .= true
+        recvdata.accessed[] = true
+        return RBuffer(senddata, recvdata.data)
+    end
+    function RBuffer(senddata::DebugMPISharedArray, recvdata::Nothing)
+        @debug_track_initialized begin
+            senddata.is_initialized .= 1
+        end
+        senddata.is_read .= true
+        senddata.accessed[] = true
+        return RBuffer(senddata.data, recvdata)
+    end
+
+    import Base: strides
+    function strides(A::DebugMPISharedArray)
+        return strides(A.data)
     end
 
     # Keep a global Vector of references to all created DebugMPISharedArray
