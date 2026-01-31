@@ -1361,6 +1361,7 @@ end
     # -- subblock
     nrank = coord.nrank
     irank = coord.irank
+    @begin_anyzv_region()
     @anyzv_serial_region begin
         # now deal with endpoints that are stored across ranks
         comm = coord.comm
