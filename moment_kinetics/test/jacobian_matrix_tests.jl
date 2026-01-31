@@ -15,7 +15,7 @@ using moment_kinetics.boundary_conditions: enforce_v_boundary_condition_local!,
                                            skip_f_electron_bc_points_in_Jacobian_z_solve
 using moment_kinetics.calculus: derivative!, second_derivative!, integral
 using moment_kinetics.communication
-using moment_kinetics.communication: _anyzv_subblock_synchronize
+using moment_kinetics.communication: _anyzv_subblock_synchronize, @_block_synchronize
 using moment_kinetics.derivatives: derivative_z_anyzv!, derivative_z_pdf_vpavperpz!
 using moment_kinetics.electron_fluid_equations: calculate_electron_moments_no_r!,
                                                 electron_energy_equation_no_r!,
@@ -47,6 +47,7 @@ using moment_kinetics.electron_z_advection: electron_z_advection!,
 using moment_kinetics.external_sources: total_external_electron_sources!,
                                         get_total_external_electron_source_term
 using moment_kinetics.jacobian_matrices
+using moment_kinetics.jacobian_matrices: get_flattened_index
 using moment_kinetics.krook_collisions: electron_krook_collisions!,
                                         get_electron_krook_collisions_term
 using moment_kinetics.looping
@@ -59,6 +60,7 @@ using moment_kinetics.velocity_moments: calculate_electron_moment_derivatives_no
 
 using moment_kinetics.BlockBandedMatrices
 using LinearAlgebra
+using moment_kinetics.MPI
 using moment_kinetics.StatsBase
 
 const regression_f_step = 100
@@ -187,6 +189,15 @@ const test_input = OptionsDict("output" => OptionsDict("run_name" => "jacobian_m
                                "krook_collisions" => OptionsDict("use_krook" => true),
                               )
 
+# Test use distributed-memory when possible
+if global_size[] % 2 == 0
+    # Divide by 2 so that we use shared memory when running in parallel.
+    procs_to_divide_by = global_size[] ÷ 2
+else
+    procs_to_divide_by = global_size[]
+end
+test_input["z"]["nelement_local"] = test_input["z"]["nelement"] ÷ gcd(test_input["z"]["nelement"], procs_to_divide_by)
+
 function get_mk_state(test_input)
     # Reset timers in case there was a previous run which did not clean them up.
     reset_mk_timers!()
@@ -213,13 +224,13 @@ function generate_norm_factor(perturbed_residual::AbstractArray{mk_float,3})
     # norm_factor happens to be (almost) zero
     norm_factor = similar(norm_factor_unsmoothed)
     for i ∈ 1:w
-        norm_factor[i,1,1,1] = mean(norm_factor_unsmoothed[1:i+w,1,1,1])
+        norm_factor[i,1,1] = mean(norm_factor_unsmoothed[1:i+w,1,1])
     end
     for i ∈ w+1:size(perturbed_residual, 1)-w
-        norm_factor[i,1,1,1] = mean(norm_factor_unsmoothed[i-w:i+w,1,1,1])
+        norm_factor[i,1,1] = mean(norm_factor_unsmoothed[i-w:i+w,1,1])
     end
     for i ∈ 1:w
-        norm_factor[end+1-i,1,1,1] = mean(norm_factor_unsmoothed[end+1-i-w:end,1,1,1])
+        norm_factor[end+1-i,1,1] = mean(norm_factor_unsmoothed[end+1-i-w:end,1,1])
     end
     return norm_factor
 end
@@ -259,7 +270,7 @@ function adi_plus_equals!(jfull::jacobian_info, jADI::jacobian_info, f_slice, p_
     @views jfull.matrix[2][2][p_slice,p_slice] .+= jADI.matrix[2][2]
     return jfull
 end
-function jacobian_vector_product(j::jacobian_info, v::AbstractVector)
+function jacobian_vector_product(j::jacobian_info, v::AbstractVector; coords...)
     result = Tuple(zeros(size(w)) for w ∈ v)
     for (x, row) ∈ zip(result, j.matrix)
         if length(row) != length(v)
@@ -267,10 +278,126 @@ function jacobian_vector_product(j::jacobian_info, v::AbstractVector)
                   * "the number of columns in j.matrix (length(row)=$(length(Row))).")
         end
         for (w, block) ∈ zip(v, row)
-            mul!(x, block, w, 1.0, 1.0)
+            # Explicit conversion to Matrix and Vector in case debug level is high enough
+            # that we are using DebugMPISharedArray for block and w.
+            mul!(x, Matrix(block), Vector(w), 1.0, 1.0)
+        end
+    end
+    if j.handle_overlaps === Val(true)
+        # Need to add up values from all distributed blocks at 'overlap' grid points.
+        for (ivariable,x) ∈ enumerate(result)
+            state_vector_coords = j.state_vector_coords[ivariable]
+            dim_sizes = j.state_vector_dim_sizes[ivariable]
+            for c ∈ state_vector_coords
+                if !(c.nrank > 1 || c.periodic)
+                    # No overlaps.
+                    continue
+                end
+                lower_overlaps_sendbuff = mk_float[]
+                upper_overlaps_sendbuff = mk_float[]
+                coord_ranges_lower = Tuple(this_c === c ? (1:1) : 1:this_c.n for this_c ∈ state_vector_coords)
+                coord_ranges_upper = Tuple(this_c === c ? (c.n:c.n) : 1:this_c.n for this_c ∈ state_vector_coords)
+                for i ∈ CartesianIndices(coord_ranges_lower)
+                    flat_i = get_flattened_index(dim_sizes, Tuple(i))
+                    push!(lower_overlaps_sendbuff, x[flat_i])
+                end
+                for i ∈ CartesianIndices(coord_ranges_upper)
+                    flat_i = get_flattened_index(dim_sizes, Tuple(i))
+                    push!(upper_overlaps_sendbuff, x[flat_i])
+                end
+                lower_overlaps_recvbuff = similar(lower_overlaps_sendbuff)
+                upper_overlaps_recvbuff = similar(upper_overlaps_sendbuff)
+                # Need the `coordinate` object, not just the `mini_coordinate` that is
+                # stored in `j`, for the MPI Communicator.
+                full_coord_object = coords[c.name]
+                r1 = MPI.Isend(lower_overlaps_sendbuff, full_coord_object.comm;
+                               dest=full_coord_object.prevrank)
+                r2 = MPI.Isend(upper_overlaps_sendbuff, full_coord_object.comm;
+                               dest=full_coord_object.nextrank)
+                r3 = MPI.Irecv!(lower_overlaps_recvbuff, full_coord_object.comm;
+                                source=full_coord_object.prevrank)
+                r4 = MPI.Irecv!(upper_overlaps_recvbuff, full_coord_object.comm;
+                                source=full_coord_object.nextrank)
+                MPI.Waitall([r1, r2, r3, r4])
+                if c.periodic || c.irank > 0
+                    # Has lower overlap, need to add.
+                    for (count, i) ∈ enumerate(CartesianIndices(coord_ranges_lower))
+                        flat_i = get_flattened_index(dim_sizes, Tuple(i))
+                        # Pick the order of addition so that it will be the same on
+                        # different ranks, ensuring identical floating point errors
+                        # everywhere.
+                        if c.irank % 2 == 0
+                            x[flat_i] = x[flat_i] + lower_overlaps_recvbuff[count]
+                        else
+                            x[flat_i] = lower_overlaps_recvbuff[count] + x[flat_i]
+                        end
+                    end
+                end
+                if c.periodic || c.irank < c.nrank - 1
+                    for (count, i) ∈ enumerate(CartesianIndices(coord_ranges_upper))
+                        flat_i = get_flattened_index(dim_sizes, Tuple(i))
+                        # Pick the order of addition so that it will be the same on
+                        # different ranks, ensuring identical floating point errors
+                        # everywhere.
+                        if c.irank % 2 == 0
+                            x[flat_i] = upper_overlaps_recvbuff[count] + x[flat_i]
+                        else
+                            x[flat_i] = x[flat_i] + upper_overlaps_recvbuff[count]
+                        end
+                    end
+                end
+            end
         end
     end
     return result
+end
+
+function gather_to_root(f::AbstractArray{mk_float,3}, p::AbstractVector{mk_float};
+                        bc="constant")
+    if n_blocks[] > 1
+        gathered_f = nothing
+        gathered_p = nothing
+        # Collect distributed results
+        @anyzv_serial_region begin
+            if global_rank[] == 0
+                # Explicit conversion to Array and Vector in case debug level is high
+                # enough that we are using DebugMPISharedArray for f and p.
+                all_f_blocks = [Array(f)]
+                all_p_blocks = [Vector(p)]
+                for iblock ∈ 1:n_blocks[]-1
+                    buffer_f = similar(f)
+                    buffer_p = similar(p)
+                    MPI.Recv!(buffer_f, comm_inter_block[]; source=iblock, tag=0)
+                    MPI.Recv!(buffer_p, comm_inter_block[]; source=iblock, tag=1)
+                    push!(all_f_blocks, buffer_f)
+                    push!(all_p_blocks, buffer_p)
+                end
+
+                # Check that overlapping entries are identical.
+                for i ∈ 1:n_blocks[]-1
+                    @test all_f_blocks[i][:,:,end] == all_f_blocks[i+1][:,:,1]
+                    @test all_p_blocks[i][end] == all_p_blocks[i+1][1]
+                end
+                if bc == "periodic"
+                    @test all_f_blocks[end][:,:,end] == all_f_blocks[1][:,:,1]
+                    @test all_p_blocks[end][end] == all_p_blocks[1][1]
+                end
+
+                gathered_f = @views cat((i==1 ? rf : rf[:,:,2:end]
+                                         for (i,rf) ∈ enumerate(all_f_blocks))...; dims=3)
+                gathered_p = @views vcat((i==1 ? rp : rp[2:end]
+                                          for (i,rp) ∈ enumerate(all_p_blocks))...)
+            else
+                MPI.Send(f, comm_inter_block[]; dest=0, tag=0)
+                MPI.Send(p, comm_inter_block[]; dest=0, tag=1)
+            end
+        end
+    else
+        gathered_f = f
+        gathered_p = p
+    end
+
+    return gathered_f, gathered_p
 end
 
 function get_delta_state(delta_f, delta_p, separate_zeroth_moment,
@@ -280,7 +407,9 @@ function get_delta_state(delta_f, delta_p, separate_zeroth_moment,
                          z_spectral)
     p_size = length(delta_p)
 
-    delta_state = [vec(delta_f), delta_p]
+    # Explicit conversion to Array and Vector in case debug level is high enough that we
+    # are using DebugMPISharedArray for delta_f and delta_p.
+    delta_state = [Vector(vec(delta_f)), Vector(delta_p)]
     if separate_zeroth_moment
         delta_zeroth_moment = zeros(mk_float, p_size)
         for iz ∈ 1:z.n
@@ -347,6 +476,11 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
     test_input = deepcopy(test_input)
     test_input["output"]["run_name"] *= "_" * label[1:min(11, length(label))]
     println("        - $label")
+
+    if occursin("lu", test_input["timestepping"]["kinetic_electron_preconditioner"])
+        # lu preconditioners do not support distributed-MPI parallelism.
+        pop!(test_input["z"], "nelement_local", 1)
+    end
     if test_input["timestepping"]["kinetic_electron_preconditioner"] == "lu_separate_dp_dz_dq_dz"
         # This preconditioner option has larger errors compared to the regression test
         # values (that were generated from "lu") than the others. Not sure why - maybe
@@ -387,7 +521,9 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
         me = composition.me_over_mi
 
         delta_p = allocate_shared_float(z; comm=comm_anyzv_subblock[])
-        p_amplitude = epsilon * maximum(p)
+        # Value is maximum(p) when run in serial, but hard-coded here to support
+        # distributed-MPI runs.
+        p_amplitude = epsilon * 0.4033333333333333
         f = @view pdf.electron.norm[:,:,:,ir]
 
         @begin_r_anyzv_region()
@@ -426,7 +562,9 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
         # low-order moments vanish exactly.
         @begin_anyzv_region()
         @anyzv_serial_region begin
-            f_amplitude = epsilon * maximum(f)
+            # Value is maximum(f) when run in serial, but hard-coded here to support
+            # distributed-MPI runs.
+            f_amplitude = epsilon * 0.4151425761427697
             delta_f .= f_amplitude .*
                        reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
                        reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
@@ -533,6 +671,7 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                                       (; vpa=vpa_spectral,
                                                        vperp=vperp_spectral, z=z_spectral);
                                                       comm=comm_anyzv_subblock[],
+                                                      handle_overlaps=Val(false),
                                                       synchronize=_anyzv_subblock_synchronize,
                                                       electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
                                                       electron_p=((:anyzv,:z), (:z,), false),
@@ -543,6 +682,7 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                                                vperp=vperp_spectral);
                                                               comm=nothing,
                                                               synchronize=nothing,
+                                                              handle_overlaps=Val(false),
                                                               electron_pdf=(nothing, (:vpa, :vperp), false),
                                                               electron_p=(nothing, (), false),
                                                               boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
@@ -551,6 +691,7 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                                               (; z=z_spectral);
                                                               comm=nothing,
                                                               synchronize=nothing,
+                                                              handle_overlaps=Val(false),
                                                               electron_pdf=(nothing, (:z,), false),
                                                               boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
                                                                                    electron_p=nothing))
@@ -795,31 +936,42 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                               separate_dq_dz, p, dp_dz, dens, ddens_dz,
                                               third_moment, dthird_moment_dz, me, z,
                                               vperp, vpa, z_spectral)
-                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian,
+                                                                        delta_state; z=z,
+                                                                        vperp=vperp,
+                                                                        vpa=vpa)
                 perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1]
 
-                # Check p did not get perturbed by the Jacobian
-                @test elementwise_isapprox(residual_update_with_Jacobian[2],
-                                           zeros(p_size); atol=1.0e-15)
+                gathered_residual, _ = gather_to_root(perturbed_residual, zeros(p_size))
+                gathered_with_Jacobian, _ =
+                    gather_to_root(reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n),
+                                   residual_update_with_Jacobian[2])
 
-                norm_factor = generate_norm_factor(perturbed_residual)
-                normed_residual = perturbed_residual ./ norm_factor
-                normed_with_Jacobian = reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor
-                @test elementwise_isapprox(normed_residual, normed_with_Jacobian;
-                                           rtol=0.0, atol=rtol)
+                if global_rank[] == 0
+                    norm_factor = generate_norm_factor(gathered_residual)
+                    normed_residual = gathered_residual ./ norm_factor
+                    normed_with_Jacobian = gathered_with_Jacobian ./ norm_factor
 
-                if expected === nothing
-                    @test false
-                    println("No stored regression test data. Tested data would be:\n"
-                            * "(delta_f_residual=$(normed_residual[1:regression_f_step:end]),\n"
-                            * " delta_f_with_Jacobian=$(normed_with_Jacobian[1:regression_f_step:end]),")
-                else
-                    @test elementwise_isapprox(normed_residual[1:regression_f_step:end],
-                                               expected.delta_f_residual; rtol=0.0,
-                                               atol=regression_tol)
-                    @test elementwise_isapprox(normed_with_Jacobian[1:regression_f_step:end],
-                                               expected.delta_f_with_Jacobian; rtol=0.0,
-                                               atol=regression_tol)
+                    # Check p did not get perturbed by the Jacobian
+                    @test elementwise_isapprox(residual_update_with_Jacobian[2],
+                                               zeros(p_size); atol=1.0e-15)
+
+                    @test elementwise_isapprox(normed_residual, normed_with_Jacobian;
+                                               rtol=0.0, atol=rtol)
+
+                    if expected === nothing
+                        @test false
+                        println("No stored regression test data. Tested data would be:\n"
+                                * "(delta_f_residual=$(normed_residual[1:regression_f_step:end]),\n"
+                                * " delta_f_with_Jacobian=$(normed_with_Jacobian[1:regression_f_step:end]),")
+                    else
+                        @test elementwise_isapprox(normed_residual[1:regression_f_step:end],
+                                                   expected.delta_f_residual; rtol=0.0,
+                                                   atol=regression_tol)
+                        @test elementwise_isapprox(normed_with_Jacobian[1:regression_f_step:end],
+                                                   expected.delta_f_with_Jacobian; rtol=0.0,
+                                                   atol=regression_tol)
+                    end
                 end
             end
         end
@@ -838,29 +990,39 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                               separate_dq_dz, p, dp_dz, dens, ddens_dz,
                                               third_moment, dthird_moment_dz, me, z,
                                               vperp, vpa, z_spectral)
-                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian,
+                                                                        delta_state; z=z,
+                                                                        vperp=vperp,
+                                                                        vpa=vpa)
                 perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1]
 
                 # Check p did not get perturbed by the Jacobian
                 @test elementwise_isapprox(residual_update_with_Jacobian[2],
                                            delta_state[2]; atol=1.0e-15)
 
-                norm_factor = generate_norm_factor(perturbed_residual)
-                normed_residual = perturbed_residual ./ norm_factor
-                normed_with_Jacobian = reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor
-                @test elementwise_isapprox(normed_residual, normed_with_Jacobian;
-                                           rtol=0.0, atol=rtol)
+                gathered_residual, _ = gather_to_root(perturbed_residual, zeros(p_size))
+                gathered_with_Jacobian, _ =
+                    gather_to_root(reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n),
+                                   residual_update_with_Jacobian[2])
 
-                if expected === nothing
-                    println(" delta_p_residual=$(normed_residual[1:regression_f_step:end]),\n"
-                            * " delta_p_with_Jacobian=$(normed_with_Jacobian[1:regression_f_step:end]),")
-                else
-                    @test elementwise_isapprox(normed_residual[1:regression_f_step:end],
-                                               expected.delta_p_residual; rtol=0.0,
-                                               atol=regression_tol)
-                    @test elementwise_isapprox(normed_with_Jacobian[1:regression_f_step:end],
-                                               expected.delta_p_with_Jacobian; rtol=0.0,
-                                               atol=regression_tol)
+                if global_rank[] == 0
+                    norm_factor = generate_norm_factor(gathered_residual)
+                    normed_residual = gathered_residual ./ norm_factor
+                    normed_with_Jacobian = gathered_with_Jacobian ./ norm_factor
+                    @test elementwise_isapprox(normed_residual, normed_with_Jacobian;
+                                               rtol=0.0, atol=rtol)
+
+                    if expected === nothing
+                        println(" delta_p_residual=$(normed_residual[1:regression_f_step:end]),\n"
+                                * " delta_p_with_Jacobian=$(normed_with_Jacobian[1:regression_f_step:end]),")
+                    else
+                        @test elementwise_isapprox(normed_residual[1:regression_f_step:end],
+                                                   expected.delta_p_residual; rtol=0.0,
+                                                   atol=regression_tol)
+                        @test elementwise_isapprox(normed_with_Jacobian[1:regression_f_step:end],
+                                                   expected.delta_p_with_Jacobian; rtol=0.0,
+                                                   atol=regression_tol)
+                    end
                 end
             end
         end
@@ -878,30 +1040,40 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                               separate_dq_dz, p, dp_dz, dens, ddens_dz,
                                               third_moment, dthird_moment_dz, me, z,
                                               vperp, vpa, z_spectral)
-                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian,
+                                                                        delta_state; z=z,
+                                                                        vperp=vperp,
+                                                                        vpa=vpa)
                 perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1]
 
                 # Check p did not get perturbed by the Jacobian
                 @test elementwise_isapprox(residual_update_with_Jacobian[2],
                                            delta_state[2]; atol=1.0e-15)
 
-                norm_factor = generate_norm_factor(perturbed_residual)
-                normed_residual = perturbed_residual ./ norm_factor
-                normed_with_Jacobian = reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor
-                @test elementwise_isapprox(normed_residual, normed_with_Jacobian;
-                                           rtol=0.0, atol=rtol)
+                gathered_residual, _ = gather_to_root(perturbed_residual, zeros(p_size))
+                gathered_with_Jacobian, _ =
+                    gather_to_root(reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n),
+                                   residual_update_with_Jacobian[2])
 
-                if expected === nothing
-                    println(" both_residual=$(normed_residual[1:regression_f_step:end]),\n"
-                            * " both_with_Jacobian=$(normed_with_Jacobian[1:regression_f_step:end]),\n"
-                            * ")")
-                else
-                    @test elementwise_isapprox(normed_residual[1:regression_f_step:end],
-                                               expected.both_residual; rtol=0.0,
-                                               atol=regression_tol)
-                    @test elementwise_isapprox(normed_with_Jacobian[1:regression_f_step:end],
-                                               expected.both_with_Jacobian; rtol=0.0,
-                                               atol=regression_tol)
+                if global_rank[] == 0
+                    norm_factor = generate_norm_factor(gathered_residual)
+                    normed_residual = gathered_residual ./ norm_factor
+                    normed_with_Jacobian = gathered_with_Jacobian ./ norm_factor
+                    @test elementwise_isapprox(normed_residual, normed_with_Jacobian;
+                                               rtol=0.0, atol=rtol)
+
+                    if expected === nothing
+                        println(" both_residual=$(gathered_residual[1:regression_f_step:end]),\n"
+                                * " both_with_Jacobian=$(normed_with_Jacobian[1:regression_f_step:end]),\n"
+                                * ")")
+                    else
+                        @test elementwise_isapprox(normed_residual[1:regression_f_step:end],
+                                                   expected.both_residual; rtol=0.0,
+                                                   atol=regression_tol)
+                        @test elementwise_isapprox(normed_with_Jacobian[1:regression_f_step:end],
+                                                   expected.both_with_Jacobian; rtol=0.0,
+                                                   atol=regression_tol)
+                    end
                 end
             end
         end
@@ -918,6 +1090,11 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
     test_input = deepcopy(test_input)
     test_input["output"]["run_name"] *= "_" * label[1:min(11, length(label))]
     println("        - $label")
+
+    if occursin("lu", test_input["timestepping"]["kinetic_electron_preconditioner"])
+        # lu preconditioners do not support distributed-MPI parallelism.
+        pop!(test_input["z"], "nelement_local", 1)
+    end
     if test_input["timestepping"]["kinetic_electron_preconditioner"] == "lu_separate_dp_dz_dq_dz"
         # This preconditioner option has larger errors compared to the regression test
         # values (that were generated from "lu") than the others. Not sure why - maybe
@@ -997,7 +1174,9 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
         update_electron_speed_z!(z_speed, upar, vth, vpa.grid)
 
         delta_p = allocate_shared_float(z; comm=comm_anyzv_subblock[])
-        p_amplitude = epsilon * maximum(p)
+        # Value is maximum(p) when run in serial, but hard-coded here to support
+        # distributed-MPI runs.
+        p_amplitude = epsilon * 0.4033333333333333
         f = @view pdf.electron.norm[:,:,:,ir]
         @begin_anyzv_region()
         @anyzv_serial_region begin
@@ -1013,7 +1192,9 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
         delta_f = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
         @begin_anyzv_region()
         @anyzv_serial_region begin
-            f_amplitude = epsilon * maximum(f)
+            # Value is maximum(f) when run in serial, but hard-coded here to support
+            # distributed-MPI runs.
+            f_amplitude = epsilon * 0.4151425761427697
             # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
             # low-order moments vanish exactly.
             delta_f .= f_amplitude .*
@@ -1090,6 +1271,7 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                                                        vperp=vperp_spectral, z=z_spectral);
                                                       comm=comm_anyzv_subblock[],
                                                       synchronize=_anyzv_subblock_synchronize,
+                                                      handle_overlaps=Val(false),
                                                       electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
                                                       electron_p=((:anyzv,:z), (:z,), false),
                                                       boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
@@ -1099,6 +1281,7 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                                                                vperp=vperp_spectral);
                                                               comm=nothing,
                                                               synchronize=nothing,
+                                                              handle_overlaps=Val(false),
                                                               electron_pdf=(nothing, (:vpa, :vperp), false),
                                                               electron_p=(nothing, (), false),
                                                               boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
@@ -1107,6 +1290,7 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                                                               (; z=z_spectral);
                                                               comm=nothing,
                                                               synchronize=nothing,
+                                                              handle_overlaps=Val(false),
                                                               electron_p=(nothing, (:z,), false),
                                                               boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
                                                                                    electron_p=nothing))
@@ -1290,39 +1474,50 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                                               separate_dq_dz, p, dp_dz, dens, ddens_dz,
                                               third_moment, dthird_moment_dz, me, z,
                                               vperp, vpa, z_spectral)
-                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian,
+                                                                        delta_state; z=z,
+                                                                        vperp=vperp,
+                                                                        vpa=vpa)
                 perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[2]
 
                 # Check f did not get perturbed by the Jacobian
                 @test elementwise_isapprox(residual_update_with_Jacobian[1],
                                            delta_state[1]; atol=1.0e-15)
 
-                if label == "ion_dt_forcing_of_electron_p"
-                    # No norm factor, because both perturbed residuals should be zero
-                    # here, as delta_f does not affect this term, and `p` is used as
-                    # `p_previous_ion_step` in this test, so the residuals are exactly
-                    # zero if there is no delta_p.
-                    norm_factor = 1.0
-                else
-                    norm_factor = generate_norm_factor(perturbed_residual)
-                end
-                normed_residual = perturbed_residual ./ norm_factor
-                normed_with_Jacobian = perturbed_with_Jacobian ./ norm_factor
-                @test elementwise_isapprox(normed_residual, normed_with_Jacobian;
-                                           rtol=0.0, atol=rtol)
+                _, gathered_residual = gather_to_root(zeros(size(f)), perturbed_residual)
+                _, gathered_with_Jacobian =
+                    gather_to_root(reshape(residual_update_with_Jacobian[1], vpa.n,
+                                           vperp.n, z.n),
+                                   perturbed_with_Jacobian)
 
-                if expected === nothing
-                    @test false
-                    println("No stored regression test data. Tested data would be:\n"
-                            * "(delta_f_residual=$(normed_residual),\n"
-                            * " delta_f_with_Jacobian=$(normed_with_Jacobian),")
-                else
-                    @test elementwise_isapprox(normed_residual,
-                                               expected.delta_f_residual; rtol=0.0,
-                                               atol=regression_tol)
-                    @test elementwise_isapprox(normed_with_Jacobian,
-                                               expected.delta_f_with_Jacobian; rtol=0.0,
-                                               atol=regression_tol)
+                if global_rank[] == 0
+                    if label == "ion_dt_forcing_of_electron_p"
+                        # No norm factor, because both perturbed residuals should be zero
+                        # here, as delta_f does not affect this term, and `p` is used as
+                        # `p_previous_ion_step` in this test, so the residuals are exactly
+                        # zero if there is no delta_p.
+                        norm_factor = 1.0
+                    else
+                        norm_factor = generate_norm_factor(gathered_residual)
+                    end
+                    normed_residual = gathered_residual ./ norm_factor
+                    normed_with_Jacobian = gathered_with_Jacobian ./ norm_factor
+                    @test elementwise_isapprox(normed_residual, normed_with_Jacobian;
+                                               rtol=0.0, atol=rtol)
+
+                    if expected === nothing
+                        @test false
+                        println("No stored regression test data. Tested data would be:\n"
+                                * "(delta_f_residual=$(normed_residual),\n"
+                                * " delta_f_with_Jacobian=$(normed_with_Jacobian),")
+                    else
+                        @test elementwise_isapprox(normed_residual,
+                                                   expected.delta_f_residual; rtol=0.0,
+                                                   atol=regression_tol)
+                        @test elementwise_isapprox(normed_with_Jacobian,
+                                                   expected.delta_f_with_Jacobian; rtol=0.0,
+                                                   atol=regression_tol)
+                    end
                 end
             end
         end
@@ -1341,29 +1536,40 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                                               separate_dq_dz, p, dp_dz, dens, ddens_dz,
                                               third_moment, dthird_moment_dz, me, z,
                                               vperp, vpa, z_spectral)
-                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian,
+                                                                        delta_state; z=z,
+                                                                        vperp=vperp,
+                                                                        vpa=vpa)
                 perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[2]
 
                 # Check f did not get perturbed by the Jacobian
                 @test elementwise_isapprox(residual_update_with_Jacobian[1],
                                            zeros(pdf_size); atol=1.0e-15)
 
-                norm_factor = generate_norm_factor(perturbed_residual)
-                normed_residual = perturbed_residual ./ norm_factor
-                normed_with_Jacobian = perturbed_with_Jacobian ./ norm_factor
-                @test elementwise_isapprox(normed_residual, normed_with_Jacobian;
-                                           rtol=0.0, atol=rtol)
+                _, gathered_residual = gather_to_root(zeros(size(f)), perturbed_residual)
+                _, gathered_with_Jacobian =
+                    gather_to_root(reshape(residual_update_with_Jacobian[1], vpa.n,
+                                           vperp.n, z.n),
+                                   perturbed_with_Jacobian)
 
-                if expected === nothing
-                    println(" delta_p_residual=$(normed_residual),\n"
-                            * " delta_p_with_Jacobian=$(normed_with_Jacobian),")
-                else
-                    @test elementwise_isapprox(normed_residual,
-                                               expected.delta_p_residual; rtol=0.0,
-                                               atol=regression_tol)
-                    @test elementwise_isapprox(normed_with_Jacobian,
-                                               expected.delta_p_with_Jacobian; rtol=0.0,
-                                               atol=regression_tol)
+                if global_rank[] == 0
+                    norm_factor = generate_norm_factor(gathered_residual)
+                    normed_residual = gathered_residual ./ norm_factor
+                    normed_with_Jacobian = gathered_with_Jacobian ./ norm_factor
+                    @test elementwise_isapprox(normed_residual, normed_with_Jacobian;
+                                               rtol=0.0, atol=rtol)
+
+                    if expected === nothing
+                        println(" delta_p_residual=$(normed_residual),\n"
+                                * " delta_p_with_Jacobian=$(normed_with_Jacobian),")
+                    else
+                        @test elementwise_isapprox(normed_residual,
+                                                   expected.delta_p_residual; rtol=0.0,
+                                                   atol=regression_tol)
+                        @test elementwise_isapprox(normed_with_Jacobian,
+                                                   expected.delta_p_with_Jacobian; rtol=0.0,
+                                                   atol=regression_tol)
+                    end
                 end
             end
         end
@@ -1381,30 +1587,41 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                                               separate_dq_dz, p, dp_dz, dens, ddens_dz,
                                               third_moment, dthird_moment_dz, me, z,
                                               vperp, vpa, z_spectral)
-                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian,
+                                                                        delta_state; z=z,
+                                                                        vperp=vperp,
+                                                                        vpa=vpa)
                 perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[2]
 
                 # Check p did not get perturbed by the Jacobian
                 @test elementwise_isapprox(residual_update_with_Jacobian[1],
                                            delta_state[1]; atol=1.0e-15)
 
-                norm_factor = generate_norm_factor(perturbed_residual)
-                normed_residual = perturbed_residual ./ norm_factor
-                normed_with_Jacobian = perturbed_with_Jacobian ./ norm_factor
-                @test elementwise_isapprox(normed_residual, normed_with_Jacobian;
-                                           rtol=0.0, atol=rtol)
+                _, gathered_residual = gather_to_root(zeros(size(f)), perturbed_residual)
+                _, gathered_with_Jacobian =
+                    gather_to_root(reshape(residual_update_with_Jacobian[1], vpa.n,
+                                           vperp.n, z.n),
+                                   perturbed_with_Jacobian)
 
-                if expected === nothing
-                    println(" both_residual=$(normed_residual),\n"
-                            * " both_with_Jacobian=$(normed_with_Jacobian),\n"
-                            * ")")
-                else
-                    @test elementwise_isapprox(normed_residual,
-                                               expected.both_residual; rtol=0.0,
-                                               atol=regression_tol)
-                    @test elementwise_isapprox(normed_with_Jacobian,
-                                               expected.both_with_Jacobian; rtol=0.0,
-                                               atol=regression_tol)
+                if global_rank[] == 0
+                    norm_factor = generate_norm_factor(gathered_residual)
+                    normed_residual = gathered_residual ./ norm_factor
+                    normed_with_Jacobian = gathered_with_Jacobian ./ norm_factor
+                    @test elementwise_isapprox(normed_residual, normed_with_Jacobian;
+                                               rtol=0.0, atol=rtol)
+
+                    if expected === nothing
+                        println(" both_residual=$(normed_residual),\n"
+                                * " both_with_Jacobian=$(normed_with_Jacobian),\n"
+                                * ")")
+                    else
+                        @test elementwise_isapprox(normed_residual,
+                                                   expected.both_residual; rtol=0.0,
+                                                   atol=regression_tol)
+                        @test elementwise_isapprox(normed_with_Jacobian,
+                                                   expected.both_with_Jacobian; rtol=0.0,
+                                                   atol=regression_tol)
+                    end
                 end
             end
         end
@@ -1428,6 +1645,11 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2,
         label = "electron_kinetic_equation_$bc"
         test_input["output"]["run_name"] *= "_" * label[1:min(11, length(label))]
         this_test_input["z"]["bc"] = bc
+
+        if occursin("lu", this_test_input["timestepping"]["kinetic_electron_preconditioner"])
+            # lu preconditioners do not support distributed-MPI parallelism.
+            pop!(this_test_input["z"], "nelement_local", 1)
+        end
         if test_input["timestepping"]["kinetic_electron_preconditioner"] == "lu_separate_dp_dz_dq_dz"
             # This preconditioner option has larger errors compared to the regression test
             # values (that were generated from "lu") than the others. Not sure why - maybe
@@ -1464,7 +1686,13 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2,
         me = composition.me_over_mi
 
         delta_p = allocate_shared_float(z; comm=comm_anyzv_subblock[])
-        p_amplitude = epsilon * maximum(p)
+        # Value is maximum(p) when run in serial, but hard-coded here to support
+        # distributed-MPI runs.
+        if bc == "wall"
+            p_amplitude = epsilon * 0.2472825704715677
+        else
+            p_amplitude = epsilon * 0.4033333333333333
+        end
         f = @view pdf.electron.norm[:,:,:,ir]
 
         @begin_r_anyzv_region()
@@ -1485,7 +1713,13 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2,
         # low-order moments vanish exactly.
         @begin_anyzv_region()
         @anyzv_serial_region begin
-            f_amplitude = epsilon * maximum(f)
+            # Value is maximum(f) when run in serial, but hard-coded here to support
+            # distributed-MPI runs.
+            if bc == "wall"
+                f_amplitude = epsilon * 0.32491294164631535
+            else
+                f_amplitude = epsilon * 0.4151425761427697
+            end
             delta_f .= f_amplitude .*
                        reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
                        reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
@@ -1589,6 +1823,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2,
                                                        vperp=vperp_spectral, z=z_spectral);
                                                       comm=comm_anyzv_subblock[],
                                                       synchronize=_anyzv_subblock_synchronize,
+                                                      handle_overlaps=Val(false),
                                                       electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
                                                       electron_p=((:anyzv,:z), (:z,), false),
                                                       boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
@@ -1598,6 +1833,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2,
                                                                vperp=vperp_spectral);
                                                               comm=nothing,
                                                               synchronize=nothing,
+                                                              handle_overlaps=Val(false),
                                                               electron_pdf=(nothing, (:vpa, :vperp), false),
                                                               electron_p=(nothing, (), false),
                                                               boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
@@ -1606,6 +1842,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2,
                                                               (; z=z_spectral);
                                                               comm=nothing,
                                                               synchronize=nothing,
+                                                              handle_overlaps=Val(false),
                                                               electron_pdf=(nothing, (:z,), false),
                                                               boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
                                                                                    electron_p=nothing))
@@ -1614,6 +1851,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2,
                                                                 (; z=z_spectral);
                                                                 comm=nothing,
                                                                 synchronize=nothing,
+                                                                handle_overlaps=Val(false),
                                                                 electron_p=(nothing, (:z,), false),
                                                                 boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
                                                                                      electron_p=nothing))
@@ -1848,41 +2086,53 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2,
                                               separate_dq_dz, p, dp_dz, dens, ddens_dz,
                                               third_moment, dthird_moment_dz, me, z,
                                               vperp, vpa, z_spectral)
-                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian,
+                                                                        delta_state; z=z,
+                                                                        vperp=vperp,
+                                                                        vpa=vpa)
                 perturbed_with_Jacobian_f = vec(original_residual_f) .+ residual_update_with_Jacobian[1]
                 perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[2]
 
-                norm_factor_f = generate_norm_factor(perturbed_residual_f)
-                normed_residual_f = perturbed_residual_f ./ norm_factor_f
-                normed_with_Jacobian_f = reshape(perturbed_with_Jacobian_f, vpa.n, vperp.n, z.n) ./ norm_factor_f
-                @test elementwise_isapprox(normed_residual_f, normed_with_Jacobian_f;
-                                           rtol=0.0, atol=rtol)
-                norm_factor_p = generate_norm_factor(perturbed_residual_p)
-                normed_residual_p = perturbed_residual_p ./ norm_factor_p
-                normed_with_Jacobian_p = perturbed_with_Jacobian_p ./ norm_factor_p
-                @test elementwise_isapprox(normed_residual_p, normed_with_Jacobian_p;
-                                           rtol=0.0, atol=rtol)
+                gathered_residual_f, gathered_residual_p =
+                    gather_to_root(perturbed_residual_f, perturbed_residual_p)
+                gathered_with_Jacobian_f, gathered_with_Jacobian_p =
+                    gather_to_root(reshape(perturbed_with_Jacobian_f, vpa.n, vperp.n,
+                                           z.n),
+                                   perturbed_with_Jacobian_p)
 
-                if expected === nothing
-                    @test false
-                    println("No stored regression test data. Tested data would be:\n"
-                            * "(delta_f_residual_f=$(normed_residual_f[1:regression_f_step:end]),\n"
-                            * " delta_f_with_Jacobian_f=$(normed_with_Jacobian_f[1:regression_f_step:end]),\n"
-                            * " delta_f_residual_p=$(normed_residual_p),\n"
-                            * " delta_f_with_Jacobian_p=$(normed_with_Jacobian_p),")
-                else
-                    @test elementwise_isapprox(normed_residual_f[1:regression_f_step:end],
-                                               expected.delta_f_residual_f; rtol=0.0,
-                                               atol=regression_tol)
-                    @test elementwise_isapprox(normed_with_Jacobian_f[1:regression_f_step:end],
-                                               expected.delta_f_with_Jacobian_f; rtol=0.0,
-                                               atol=regression_tol)
-                    @test elementwise_isapprox(normed_residual_p,
-                                               expected.delta_f_residual_p; rtol=0.0,
-                                               atol=regression_tol)
-                    @test elementwise_isapprox(normed_with_Jacobian_p,
-                                               expected.delta_f_with_Jacobian_p; rtol=0.0,
-                                               atol=regression_tol)
+                if global_rank[] == 0
+                    norm_factor_f = generate_norm_factor(gathered_residual_f)
+                    normed_residual_f = gathered_residual_f ./ norm_factor_f
+                    normed_with_Jacobian_f = gathered_with_Jacobian_f ./ norm_factor_f
+                    @test elementwise_isapprox(normed_residual_f, normed_with_Jacobian_f;
+                                               rtol=0.0, atol=rtol)
+                    norm_factor_p = generate_norm_factor(gathered_residual_p)
+                    normed_residual_p = gathered_residual_p ./ norm_factor_p
+                    normed_with_Jacobian_p = gathered_with_Jacobian_p ./ norm_factor_p
+                    @test elementwise_isapprox(normed_residual_p, normed_with_Jacobian_p;
+                                               rtol=0.0, atol=rtol)
+
+                    if expected === nothing
+                        @test false
+                        println("No stored regression test data. Tested data would be:\n"
+                                * "(delta_f_residual_f=$(normed_residual_f[1:regression_f_step:end]),\n"
+                                * " delta_f_with_Jacobian_f=$(normed_with_Jacobian_f[1:regression_f_step:end]),\n"
+                                * " delta_f_residual_p=$(normed_residual_p),\n"
+                                * " delta_f_with_Jacobian_p=$(normed_with_Jacobian_p),")
+                    else
+                        @test elementwise_isapprox(normed_residual_f[1:regression_f_step:end],
+                                                   expected.delta_f_residual_f; rtol=0.0,
+                                                   atol=regression_tol)
+                        @test elementwise_isapprox(normed_with_Jacobian_f[1:regression_f_step:end],
+                                                   expected.delta_f_with_Jacobian_f; rtol=0.0,
+                                                   atol=regression_tol)
+                        @test elementwise_isapprox(normed_residual_p,
+                                                   expected.delta_f_residual_p; rtol=0.0,
+                                                   atol=regression_tol)
+                        @test elementwise_isapprox(normed_with_Jacobian_p,
+                                                   expected.delta_f_with_Jacobian_p; rtol=0.0,
+                                                   atol=regression_tol)
+                    end
                 end
             end
         end
@@ -1904,39 +2154,51 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2,
                                               separate_dq_dz, p, dp_dz, dens, ddens_dz,
                                               third_moment, dthird_moment_dz, me, z,
                                               vperp, vpa, z_spectral)
-                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian,
+                                                                        delta_state; z=z,
+                                                                        vperp=vperp,
+                                                                        vpa=vpa)
                 perturbed_with_Jacobian_f = vec(original_residual_f) .+ residual_update_with_Jacobian[1]
                 perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[2]
 
-                norm_factor_f = generate_norm_factor(perturbed_residual_f)
-                normed_residual_f = perturbed_residual_f ./ norm_factor_f
-                normed_with_Jacobian_f = reshape(perturbed_with_Jacobian_f, vpa.n, vperp.n, z.n) ./ norm_factor_f
-                @test elementwise_isapprox(normed_residual_f, normed_with_Jacobian_f;
-                                           rtol=0.0, atol=rtol)
-                norm_factor_p = generate_norm_factor(perturbed_residual_p)
-                normed_residual_p = perturbed_residual_p ./ norm_factor_p
-                normed_with_Jacobian_p = perturbed_with_Jacobian_p ./ norm_factor_p
-                @test elementwise_isapprox(normed_residual_p, normed_with_Jacobian_p;
-                                           rtol=0.0, atol=rtol)
+                gathered_residual_f, gathered_residual_p =
+                    gather_to_root(perturbed_residual_f, perturbed_residual_p)
+                gathered_with_Jacobian_f, gathered_with_Jacobian_p =
+                    gather_to_root(reshape(perturbed_with_Jacobian_f, vpa.n, vperp.n,
+                                           z.n),
+                                   perturbed_with_Jacobian_p)
 
-                if expected === nothing
-                    println(" delta_p_residual_f=$(normed_residual_f[1:regression_f_step:end]),\n"
-                            * " delta_p_with_Jacobian_f=$(normed_with_Jacobian_f[1:regression_f_step:end]),\n"
-                            * " delta_p_residual_p=$(normed_residual_p),\n"
-                            * " delta_p_with_Jacobian_p=$(normed_with_Jacobian_p),")
-                else
-                    @test elementwise_isapprox(normed_residual_f[1:regression_f_step:end],
-                                               expected.delta_p_residual_f; rtol=0.0,
-                                               atol=regression_tol)
-                    @test elementwise_isapprox(normed_with_Jacobian_f[1:regression_f_step:end],
-                                               expected.delta_p_with_Jacobian_f; rtol=0.0,
-                                               atol=regression_tol)
-                    @test elementwise_isapprox(normed_residual_p,
-                                               expected.delta_p_residual_p; rtol=0.0,
-                                               atol=regression_tol)
-                    @test elementwise_isapprox(normed_with_Jacobian_p,
-                                               expected.delta_p_with_Jacobian_p; rtol=0.0,
-                                               atol=regression_tol)
+                if global_rank[] == 0
+                    norm_factor_f = generate_norm_factor(gathered_residual_f)
+                    normed_residual_f = gathered_residual_f ./ norm_factor_f
+                    normed_with_Jacobian_f = gathered_with_Jacobian_f ./ norm_factor_f
+                    @test elementwise_isapprox(normed_residual_f, normed_with_Jacobian_f;
+                                               rtol=0.0, atol=rtol)
+                    norm_factor_p = generate_norm_factor(gathered_residual_p)
+                    normed_residual_p = gathered_residual_p ./ norm_factor_p
+                    normed_with_Jacobian_p = gathered_with_Jacobian_p ./ norm_factor_p
+                    @test elementwise_isapprox(normed_residual_p, normed_with_Jacobian_p;
+                                               rtol=0.0, atol=rtol)
+
+                    if expected === nothing
+                        println(" delta_p_residual_f=$(normed_residual_f[1:regression_f_step:end]),\n"
+                                * " delta_p_with_Jacobian_f=$(normed_with_Jacobian_f[1:regression_f_step:end]),\n"
+                                * " delta_p_residual_p=$(normed_residual_p),\n"
+                                * " delta_p_with_Jacobian_p=$(normed_with_Jacobian_p),")
+                    else
+                        @test elementwise_isapprox(normed_residual_f[1:regression_f_step:end],
+                                                   expected.delta_p_residual_f; rtol=0.0,
+                                                   atol=regression_tol)
+                        @test elementwise_isapprox(normed_with_Jacobian_f[1:regression_f_step:end],
+                                                   expected.delta_p_with_Jacobian_f; rtol=0.0,
+                                                   atol=regression_tol)
+                        @test elementwise_isapprox(normed_residual_p,
+                                                   expected.delta_p_residual_p; rtol=0.0,
+                                                   atol=regression_tol)
+                        @test elementwise_isapprox(normed_with_Jacobian_p,
+                                                   expected.delta_p_with_Jacobian_p; rtol=0.0,
+                                                   atol=regression_tol)
+                    end
                 end
             end
         end
@@ -1958,40 +2220,52 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2,
                                               separate_dq_dz, p, dp_dz, dens, ddens_dz,
                                               third_moment, dthird_moment_dz, me, z,
                                               vperp, vpa, z_spectral)
-                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian,
+                                                                        delta_state; z=z,
+                                                                        vperp=vperp,
+                                                                        vpa=vpa)
                 perturbed_with_Jacobian_f = vec(original_residual_f) .+ residual_update_with_Jacobian[1]
                 perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[2]
 
-                norm_factor_f = generate_norm_factor(perturbed_residual_f)
-                normed_residual_f = perturbed_residual_f ./ norm_factor_f
-                normed_with_Jacobian_f = reshape(perturbed_with_Jacobian_f, vpa.n, vperp.n, z.n) ./ norm_factor_f
-                @test elementwise_isapprox(normed_residual_f, normed_with_Jacobian_f;
-                                           rtol=0.0, atol=rtol)
-                norm_factor_p = generate_norm_factor(perturbed_residual_p)
-                normed_residual_p = perturbed_residual_p ./ norm_factor_p
-                normed_with_Jacobian_p = perturbed_with_Jacobian_p ./ norm_factor_p
-                @test elementwise_isapprox(normed_residual_p, normed_with_Jacobian_p;
-                                           rtol=0.0, atol=rtol)
+                gathered_residual_f, gathered_residual_p =
+                    gather_to_root(perturbed_residual_f, perturbed_residual_p)
+                gathered_with_Jacobian_f, gathered_with_Jacobian_p =
+                    gather_to_root(reshape(perturbed_with_Jacobian_f, vpa.n, vperp.n,
+                                           z.n),
+                                   perturbed_with_Jacobian_p)
 
-                if expected === nothing
-                    println(" both_residual_f=$(normed_residual_f[1:regression_f_step:end]),\n"
-                            * " both_with_Jacobian_f=$(normed_with_Jacobian_f[1:regression_f_step:end]),\n"
-                            * " both_residual_p=$(normed_residual_p),\n"
-                            * " both_with_Jacobian_p=$(normed_with_Jacobian_p),\n"
-                            * ")")
-                else
-                    @test elementwise_isapprox(normed_residual_f[1:regression_f_step:end],
-                                               expected.both_residual_f; rtol=0.0,
-                                               atol=regression_tol)
-                    @test elementwise_isapprox(normed_with_Jacobian_f[1:regression_f_step:end],
-                                               expected.both_with_Jacobian_f; rtol=0.0,
-                                               atol=regression_tol)
-                    @test elementwise_isapprox(normed_residual_p,
-                                               expected.both_residual_p; rtol=0.0,
-                                               atol=regression_tol)
-                    @test elementwise_isapprox(normed_with_Jacobian_p,
-                                               expected.both_with_Jacobian_p; rtol=0.0,
-                                               atol=regression_tol)
+                if global_rank[] == 0
+                    norm_factor_f = generate_norm_factor(gathered_residual_f)
+                    normed_residual_f = gathered_residual_f ./ norm_factor_f
+                    normed_with_Jacobian_f = gathered_with_Jacobian_f ./ norm_factor_f
+                    @test elementwise_isapprox(normed_residual_f, normed_with_Jacobian_f;
+                                               rtol=0.0, atol=rtol)
+                    norm_factor_p = generate_norm_factor(gathered_residual_p)
+                    normed_residual_p = gathered_residual_p ./ norm_factor_p
+                    normed_with_Jacobian_p = gathered_with_Jacobian_p ./ norm_factor_p
+                    @test elementwise_isapprox(normed_residual_p, normed_with_Jacobian_p;
+                                               rtol=0.0, atol=rtol)
+
+                    if expected === nothing
+                        println(" both_residual_f=$(normed_residual_f[1:regression_f_step:end]),\n"
+                                * " both_with_Jacobian_f=$(normed_with_Jacobian_f[1:regression_f_step:end]),\n"
+                                * " both_residual_p=$(normed_residual_p),\n"
+                                * " both_with_Jacobian_p=$(normed_with_Jacobian_p),\n"
+                                * ")")
+                    else
+                        @test elementwise_isapprox(normed_residual_f[1:regression_f_step:end],
+                                                   expected.both_residual_f; rtol=0.0,
+                                                   atol=regression_tol)
+                        @test elementwise_isapprox(normed_with_Jacobian_f[1:regression_f_step:end],
+                                                   expected.both_with_Jacobian_f; rtol=0.0,
+                                                   atol=regression_tol)
+                        @test elementwise_isapprox(normed_residual_p,
+                                                   expected.both_residual_p; rtol=0.0,
+                                                   atol=regression_tol)
+                        @test elementwise_isapprox(normed_with_Jacobian_p,
+                                                   expected.both_with_Jacobian_p; rtol=0.0,
+                                                   atol=regression_tol)
+                    end
                 end
             end
         end
@@ -2013,6 +2287,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2,
     # over-optimistic error estimate due the time update matrix for all other z-indices
     # just being the identity.
     test_input["z"]["nelement"] = 1
+    test_input["z"]["nelement_local"] = 1
     test_input["z"]["ngrid"] = 2
     test_input["z"]["bc"] = "wall"
 
@@ -2075,7 +2350,9 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2,
         update_electron_speed_z!(z_speed, upar, vth, vpa.grid)
 
         delta_p = allocate_shared_float(z; comm=comm_anyzv_subblock[])
-        p_amplitude = epsilon * maximum(p)
+        # Value is maximum(p) when run in serial, but hard-coded here to support
+        # distributed-MPI runs.
+        p_amplitude = epsilon * 0.05435367155526757
         f = @view pdf.electron.norm[:,:,:,ir]
         @begin_anyzv_region()
         @anyzv_serial_region begin
@@ -2099,7 +2376,9 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2,
         # at the z-boundaries
         @begin_anyzv_region()
         @anyzv_serial_region begin
-            f_amplitude = epsilon * maximum(f)
+            # Value is maximum(f) when run in serial, but hard-coded here to support
+            # distributed-MPI runs.
+            f_amplitude = epsilon * 0.31738073164749686
             @. delta_p = p_amplitude
 
             delta_f .= f_amplitude .*
@@ -2146,6 +2425,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2,
                                                        vperp=vperp_spectral, z=z_spectral);
                                                       comm=comm_anyzv_subblock[],
                                                       synchronize=_anyzv_subblock_synchronize,
+                                                      handle_overlaps=Val(false),
                                                       electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
                                                       electron_p=((:anyzv,:z), (:z,), false),
                                                       boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
@@ -2155,6 +2435,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2,
                                                                vperp=vperp_spectral);
                                                               comm=nothing,
                                                               synchronize=nothing,
+                                                              handle_overlaps=Val(false),
                                                               electron_pdf=(nothing, (:vpa, :vperp), false),
                                                               electron_p=(nothing, (), false),
                                                               boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
@@ -2312,7 +2593,10 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2,
                                               separate_dq_dz, p, dp_dz, dens, ddens_dz,
                                               third_moment, dthird_moment_dz, me, z,
                                               vperp, vpa, z_spectral)
-                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian,
+                                                                        delta_state; z=z,
+                                                                        vperp=vperp,
+                                                                        vpa=vpa)
                 perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1]
 
                 # Check p did not get perturbed by the Jacobian
@@ -2331,18 +2615,24 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2,
                 @test elementwise_isapprox(perturbed_residual, reshaped_with_Jacobian;
                                            rtol=0.0, atol=atol)
 
-                if expected === nothing
-                    @test false
-                    println("No stored regression test data. Tested data would be:\n"
-                            * "(delta_f_residual=$(perturbed_residual[1:regression_f_step:end]),\n"
-                            * " delta_f_with_Jacobian=$(reshaped_with_Jacobian[1:regression_f_step:end]),")
-                else
-                    @test elementwise_isapprox(perturbed_residual[1:regression_f_step:end],
-                                               expected.delta_f_residual; rtol=0.0,
-                                               atol=1.0e-13)
-                    @test elementwise_isapprox(reshaped_with_Jacobian[1:regression_f_step:end],
-                                               expected.delta_f_with_Jacobian; rtol=0.0,
-                                               atol=1.0e-13)
+                gathered_residual, _ = gather_to_root(perturbed_residual, zeros(p_size))
+                gathered_with_Jacobian, _ =
+                    gather_to_root(reshaped_with_Jacobian, residual_update_with_Jacobian[2])
+
+                if global_rank[] == 0
+                    if expected === nothing
+                        @test false
+                        println("No stored regression test data. Tested data would be:\n"
+                                * "(delta_f_residual=$(gathered_residual[1:regression_f_step:end]),\n"
+                                * " delta_f_with_Jacobian=$(gatherd_with_Jacobian[1:regression_f_step:end]),")
+                    else
+                        @test elementwise_isapprox(gathered_residual[1:regression_f_step:end],
+                                                   expected.delta_f_residual; rtol=0.0,
+                                                   atol=1.0e-13)
+                        @test elementwise_isapprox(gathered_with_Jacobian[1:regression_f_step:end],
+                                                   expected.delta_f_with_Jacobian; rtol=0.0,
+                                                   atol=1.0e-13)
+                    end
                 end
             end
         end
@@ -2364,7 +2654,10 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2,
                                               separate_dq_dz, p, dp_dz, dens, ddens_dz,
                                               third_moment, dthird_moment_dz, me, z,
                                               vperp, vpa, z_spectral)
-                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian,
+                                                                        delta_state; z=z,
+                                                                        vperp=vperp,
+                                                                        vpa=vpa)
                 perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1]
 
                 # Check p did not get perturbed by the Jacobian
@@ -2376,23 +2669,29 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2,
                 # points.
                 @test norm(vec(perturbed_residual) .- perturbed_with_Jacobian) > 1.0e-12
 
+                gathered_residual, _ = gather_to_root(perturbed_residual, zeros(p_size))
+                gathered_with_Jacobian, _ =
+                    gather_to_root(reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n),
+                                   residual_update_with_Jacobian[2])
+
                 # Use an absolute tolerance for this test because if we used a norm_factor
                 # like the other tests, it would be zero to machine precision at some
                 # points.
-                reshaped_with_Jacobian = reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n)
-                @test elementwise_isapprox(perturbed_residual, reshaped_with_Jacobian;
+                @test elementwise_isapprox(gathered_residual, gathered_with_Jacobian;
                                            rtol=0.0, atol=atol)
 
-                if expected === nothing
-                    println(" delta_p_residual=$(perturbed_residual[1:regression_f_step:end]),\n"
-                            * " delta_p_with_Jacobian=$(reshaped_with_Jacobian[1:regression_f_step:end]),")
-                else
-                    @test elementwise_isapprox(perturbed_residual[1:regression_f_step:end],
-                                               expected.delta_p_residual; rtol=0.0,
-                                               atol=1.0e-13)
-                    @test elementwise_isapprox(reshaped_with_Jacobian[1:regression_f_step:end],
-                                               expected.delta_p_with_Jacobian; rtol=0.0,
-                                               atol=1.0e-13)
+                if global_rank[] == 0
+                    if expected === nothing
+                        println(" delta_p_residual=$(gathered_residual[1:regression_f_step:end]),\n"
+                                * " delta_p_with_Jacobian=$(gathered_with_Jacobian[1:regression_f_step:end]),")
+                    else
+                        @test elementwise_isapprox(gathered_residual[1:regression_f_step:end],
+                                                   expected.delta_p_residual; rtol=0.0,
+                                                   atol=1.0e-13)
+                        @test elementwise_isapprox(gathered_with_Jacobian[1:regression_f_step:end],
+                                                   expected.delta_p_with_Jacobian; rtol=0.0,
+                                                   atol=1.0e-13)
+                    end
                 end
             end
         end
@@ -2414,7 +2713,10 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2,
                                               separate_dq_dz, p, dp_dz, dens, ddens_dz,
                                               third_moment, dthird_moment_dz, me, z,
                                               vperp, vpa, z_spectral)
-                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian,
+                                                                        delta_state; z=z,
+                                                                        vperp=vperp,
+                                                                        vpa=vpa)
                 perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1]
 
                 # Check p did not get perturbed by the Jacobian
@@ -2426,24 +2728,30 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2,
                 # points.
                 @test norm(vec(perturbed_residual) .- perturbed_with_Jacobian) > 1.0e-12
 
+                gathered_residual, _ = gather_to_root(perturbed_residual, zeros(p_size))
+                gathered_with_Jacobian, _ =
+                    gather_to_root(reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n),
+                                   residual_update_with_Jacobian[2])
+
                 # Use an absolute tolerance for this test because if we used a norm_factor
                 # like the other tests, it would be zero to machine precision at some
                 # points.
-                reshaped_with_Jacobian = reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n)
-                @test elementwise_isapprox(perturbed_residual, reshaped_with_Jacobian;
+                @test elementwise_isapprox(gathered_residual, gathered_with_Jacobian;
                                            rtol=0.0, atol=atol)
 
-                if expected === nothing
-                    println(" both_residual=$(perturbed_residual[1:regression_f_step:end]),\n"
-                            * " both_with_Jacobian=$(reshaped_with_Jacobian[1:regression_f_step:end]),\n"
-                            * ")")
-                else
-                    @test elementwise_isapprox(perturbed_residual[1:regression_f_step:end],
-                                               expected.both_residual; rtol=0.0,
-                                               atol=1.0e-13)
-                    @test elementwise_isapprox(reshaped_with_Jacobian[1:regression_f_step:end],
-                                               expected.both_with_Jacobian; rtol=0.0,
-                                               atol=1.0e-13)
+                if global_rank[] == 0
+                    if expected === nothing
+                        println(" both_residual=$(gathered_residual[1:regression_f_step:end]),\n"
+                                * " both_with_Jacobian=$(gathered_with_Jacobian[1:regression_f_step:end]),\n"
+                                * ")")
+                    else
+                        @test elementwise_isapprox(gathered_residual[1:regression_f_step:end],
+                                                   expected.both_residual; rtol=0.0,
+                                                   atol=1.0e-13)
+                        @test elementwise_isapprox(gathered_with_Jacobian[1:regression_f_step:end],
+                                                   expected.both_with_Jacobian; rtol=0.0,
+                                                   atol=1.0e-13)
+                    end
                 end
             end
         end
@@ -2463,6 +2771,11 @@ function test_jacobian_inversion(test_input; rtol=2.0e-12)
         label = "jacobian_inversion"
         test_input["output"]["run_name"] *= "_" * label[1:min(11, length(label))]
         this_test_input["z"]["bc"] = bc
+
+        if occursin("lu", this_test_input["timestepping"]["kinetic_electron_preconditioner"])
+            # lu preconditioners do not support distributed-MPI parallelism.
+            pop!(this_test_input["z"], "nelement_local", 1)
+        end
 
         # Suppress console output while running
         pdf, scratch, scratch_implicit, scratch_electron, t_params, vz, vr, vzeta, vpa,
@@ -2542,29 +2855,29 @@ function test_jacobian_inversion(test_input; rtol=2.0e-12)
         residual_func!((residual_p, residual_f), (p, f))
 
         apply_preconditioner!((residual_p, residual_f))
+        @_anyzv_subblock_synchronize()
 
-        if expected === nothing
-            @test false
-            println("No stored regression test data. Tested data would be:\n"
-                    * "(expected_precon_f=", @view residual_f[1:regression_f_step:end], ",\n"
-                    * " expected_precon_p=", residual_p, ",\n"
-                    * ")")
-        else
-            @test elementwise_isapprox(expected.precon_f,
-                                       @view residual_f[1:regression_f_step:end];
-                                       rtol=rtol, atol=1.0e-20)
+        residual_f, residual_p = gather_to_root(residual_f, residual_p; bc=bc)
 
-            if (nl_solver_params.electron_advance.preconditioner_type === Val(:electron_lu_separate_dp_dz_dq_dz)
-                    && bc == "periodic")
-                # This combination has a strangely high relative error. Not sure why,
-                # maybe just bad luck (?), but :lu_separate_dp_dz_dq_dz is not commonly
-                # used anyway, so allow this to pass (at least for now).
-                p_rtol = rtol * 1.0e3
+        if global_rank[] == 0
+            if expected === nothing
+                @test false
             else
-                p_rtol = rtol
+                @test elementwise_isapprox(expected.precon_f, @view residual_f[1:100:end];
+                                           rtol=rtol, atol=1.0e-20)
+
+                if (nl_solver_params.electron_advance.preconditioner_type === Val(:electron_lu_separate_dp_dz_dq_dz)
+                        && bc == "periodic")
+                    # This combination has a strangely high relative error. Not sure why,
+                    # maybe just bad luck (?), but :lu_separate_dp_dz_dq_dz is not commonly
+                    # used anyway, so allow this to pass (at least for now).
+                    p_rtol = rtol * 1.0e3
+                else
+                    p_rtol = rtol
+                end
+                @test elementwise_isapprox(expected.precon_p, residual_p; rtol=p_rtol,
+                                           atol=1.0e-20)
             end
-            @test elementwise_isapprox(expected.precon_p, residual_p; rtol=p_rtol,
-                                       atol=1.0e-20)
         end
 
         cleanup_mk_state!(ascii_io, io_moments, io_dfns)
