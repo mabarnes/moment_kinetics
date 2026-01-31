@@ -491,7 +491,10 @@ function setup_electron_io(io_input, vpa, vperp, z, r, composition, collisions,
 
         # check to see if output_dir exists in the current directory
         # if not, create it
-        isdir(io_input.output_dir) || mkdir(io_input.output_dir)
+        if global_rank[] == 0
+            isdir(io_input.output_dir) || mkdir(io_input.output_dir)
+        end
+        MPI.Barrier(comm_inter_block[])
         out_prefix = joinpath(io_input.output_dir, io_input.run_name)
 
         run_id = io_input.run_id
