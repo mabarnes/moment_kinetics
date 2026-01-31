@@ -76,9 +76,27 @@ function runtests(; restart=false)
     @testset "$test_type" begin
         global_rank[] == 0 && println("$test_type tests")
 
-        n_factors = length(factor(Vector, global_size[]))
-
         for input ∈ test_input_list, debug_loop_type ∈ dimension_combinations_to_test
+            # Work out if this input sets up any distributed-MPI parallelism.
+            shared_size = global_size[]
+            for coord ∈ ("z", "r")
+                coord_input = get(input, coord, OptionsDict())
+                nelement = get(coord_input, "nelement", 1)
+                nelement_local = get(coord_input, "nelement_local", nelement)
+                if nelement % nelement_local != 0
+                    error("nelement_local=$nelement_local does not divide "
+                          * "nelemnent=$nelement for coordinate \"$coord\".")
+                end
+                coord_nblocks = nelement ÷ nelement_local
+                if shared_size % coord_nblocks != 0
+                    error("coord_nblocks=$coord_nblocks does not divide "
+                          * "shared_size=$shared_size for coordinate \"$coord\".")
+                end
+                shared_size ÷= coord_nblocks
+            end
+
+            n_factors = length(factor(Vector, shared_size))
+
             composition_section = get(input, "composition", OptionsDict())
             if :sn ∈ debug_loop_type && "n_neutral_species" ∈ keys(composition_section) &&
                     composition_section["n_neutral_species"] <= 0
