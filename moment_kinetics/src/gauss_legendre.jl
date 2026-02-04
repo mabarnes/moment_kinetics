@@ -1190,7 +1190,8 @@ function setup_global_strong_form_matrix!(QQ_global::Array{mk_float,2},
     # a radau element is used for the vperp grid (see get_QQ_local!())
     get_QQ_local!(QQ_j,j,lobatto,radau,coord,option)
     if periodic_bc && coord.nrank != 1
-        error("periodic boundary conditions not supported when dimension is distributed")
+        #error("periodic boundary conditions not supported when dimension is distributed")
+        println("WARNING: periodic boundary conditions not supported in `setup_global_strong_form_matrix!()` when dimension is distributed")
     end
     if periodic_bc && coord.nrank == 1
         QQ_global[imax[end], imin[j]:imax[j]] .+= QQ_j[1,:] ./ 2.0
