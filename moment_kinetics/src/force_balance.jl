@@ -108,14 +108,15 @@ to update the parallel particle flux dens*upar for each species
         T_e = composition.T_e
         @loop_s_r is ir begin
             for iz ∈ z_indices
-                # set the ion flow to local sound speed at wall
+                # set the ion flow to local sound speed at wall, each temperature being a parallel temperature
+                # note that Tpar is 3 time T in this case. NOTE THAT THIS IS FOR 1V ONLY
                 if iz == 1
-                    if upar_out[iz,ir,is] > -sqrt(T_e + moments.ion.temp[iz,ir,is])
-                        upar_out[iz,ir,is] = -sqrt(T_e + moments.ion.temp[iz,ir,is])
+                    if upar_out[iz,ir,is] > -sqrt(T_e + 3*moments.ion.temp[iz,ir,is])
+                        upar_out[iz,ir,is] = -sqrt(T_e + 3*moments.ion.temp[iz,ir,is])
                     end
                 else
-                    if upar_out[iz,ir,is] < sqrt(T_e + moments.ion.temp[iz,ir,is])
-                        upar_out[iz,ir,is] = sqrt(T_e + moments.ion.temp[iz,ir,is])
+                    if upar_out[iz,ir,is] < sqrt(T_e + 3*moments.ion.temp[iz,ir,is])
+                        upar_out[iz,ir,is] = sqrt(T_e + 3*moments.ion.temp[iz,ir,is])
                     end
                 end
             end
