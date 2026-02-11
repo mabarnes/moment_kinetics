@@ -1351,7 +1351,7 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
         elseif error_norm_method == "L2"
             # Get overall maximum error on the shared-memory block
             error_norms_vec = [l for l ∈ values(error_norms)]
-            MPI.Reduce!(error_norms_vec, +, comm_block[]; root=0)
+            MPI.Reduce!(error_norms_vec, MPI.SUM, comm_block[]; root=0)
 
             error_norm = Ref{mk_float}(0.0)
             max_error_variable_index = -1
