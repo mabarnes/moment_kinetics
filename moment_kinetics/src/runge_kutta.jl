@@ -15,6 +15,7 @@ using ..looping
 using ..type_definitions: mk_float, MPISharedArray
 
 using MPI
+using Quadmath
 using StatsBase: mean
 
 """
@@ -1295,6 +1296,11 @@ function local_error_norm(f_loworder::MPISharedArray{mk_float,6},
     end
 end
 
+# Need to 'register' this operation explicitly to use it in MPI reduction operations on
+# non-x86 processor architectures
+# (https://juliaparallel.org/MPI.jl/stable/knownissues/#Custom-reduction-operators).
+MPI.@RegisterOp(+, Float128)
+
 """
     adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                                        total_points, error_norm_method, success,
@@ -1351,13 +1357,19 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
         elseif error_norm_method == "L2"
             # Get overall maximum error on the shared-memory block
             error_norms_vec = [l for l ∈ values(error_norms)]
-            MPI.Reduce!(error_norms_vec, MPI.SUM, comm_block[]; root=0)
+            # In case we are using Float128 for error_norms, need to explicitly call
+            # MPI.Op() to use the method registered with MPI.@RegisterOp above.
+            MPI.Reduce!(error_norms_vec, MPI.Op(+, eltype(error_norms_vec)), comm_block[];
+                        root=0)
 
             error_norm = Ref{mk_float}(0.0)
             max_error_variable_index = -1
             @serial_region begin
                 # Get maximum error over all blocks
-                MPI.Allreduce!(error_norms_vec, +, comm_inter_block[])
+                # In case we are using Float128 for error_norms, need to explicitly call
+                # MPI.Op() to use the method registered with MPI.@RegisterOp above.
+                MPI.Allreduce!(error_norms_vec, MPI.Op(+, eltype(error_norms_vec)),
+                               comm_inter_block[])
 
                 # So far `error_norms_vec` is the sum of squares of the errors. Now that summation
                 # is finished, need to divide by total number of points and take square-root.
@@ -1420,13 +1432,19 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
         elseif error_norm_method == "L2"
             # Get overall maximum error on the shared-memory block
             error_norms_vec = [l for l ∈ values(error_norms)]
-            MPI.Reduce!(error_norms_vec, +, comm_anyzv_subblock[]; root=0)
+            # In case we are using Float128 for error_norms, need to explicitly call
+            # MPI.Op() to use the method registered with MPI.@RegisterOp above.
+            MPI.Reduce!(error_norms_vec, MPI.Op(+, eltype(error_norms_vec)),
+                        comm_anyzv_subblock[]; root=0)
 
             error_norm = Ref{mk_float}(0.0)
             max_error_variable_index = -1
             @anyzv_serial_region begin
                 # Get maximum error over all blocks
-                MPI.Allreduce!(error_norms_vec, +, z.comm)
+                # In case we are using Float128 for error_norms, need to explicitly call
+                # MPI.Op() to use the method registered with MPI.@RegisterOp above.
+                MPI.Allreduce!(error_norms_vec, MPI.Op(+, eltype(error_norms_vec)),
+                               z.comm)
 
                 # So far `error_norms_vec` is the sum of squares of the errors. Now that summation
                 # is finished, need to divide by total number of points and take square-root.
