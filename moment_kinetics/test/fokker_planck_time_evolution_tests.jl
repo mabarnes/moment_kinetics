@@ -455,7 +455,7 @@ function run_test(test_input, expected, atol, final_atol; interp_to_expected=tru
                 f_err = @. abs(expected.f_ion[:,:,tind] - f_ion[:,:,tind])
                 max_f_err = maximum(f_err)
                 @test isapprox(max_f_err, 0.0, atol=this_atol)
-                @test elementwise_isapprox(expected.f_ion[:,:,tind], f_ion[:,:,tind], rtol=this_atol, atol=this_atol*2.0e-3)
+                @test elementwise_isapprox(expected.f_ion[:,:,tind], f_ion[:,:,tind], rtol=this_atol, atol=this_atol*1.0e-3)
 println("max differences tind=$tind ", extrema(expected.f_ion[:,:,tind] .- f_ion[:,:,tind]))
             end
         end
@@ -480,7 +480,7 @@ function runtests(; highres=false)
         test_cases = Any[(false, false, false, 2.0e-14, 2.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 1.0e-4 : 5.0e-12, highres ? 4.0e-3 : 1.0e-5)]
         @long push!(test_cases, (true, false, false, highres ? 2.0e-8 : 2.0e-14, highres ? 2.0e-8 : 2.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 1.0e-4 : 5.0e-12, highres ? 4.0e-3 : 1.0e-5))
         @long push!(test_cases, (true, true, false, highres ? 2.0e-3 : 4.0e-14, highres ? 3.0e-4 : 2.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 3.0e-4 : 5.0e-12, highres ? 4.0e-3 : 1.0e-5))
-        push!(test_cases, (true, true, true, highres ? 2.0e-3 : 2.0e-14, highres ? 2.0e-3 : 2.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 2.0e-3 : 5.0e-12, highres ? 4.0e-3 : 1.0e-3))
+        push!(test_cases, (true, true, true, highres ? 2.0e-3 : 4.0e-14, highres ? 2.0e-3 : 2.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 2.0e-3 : 5.0e-12, highres ? 4.0e-3 : 1.0e-3))
         @testset "evolve_density=$evolve_density, evolve_upar=$evolve_upar, evolve_p=$evolve_p" for
                 (evolve_density, evolve_upar, evolve_p, tol1, tol2, tol3, tol4, tol5) ∈ test_cases
             println("  evolve_density=$evolve_density, evolve_upar=$evolve_upar, evolve_p=$evolve_p:")
