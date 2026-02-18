@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@latest
         with:
-          version: '1.11'
+          version: '1.12'
       - uses: julia-actions/cache@v2
       - name: Build and deploy
         env:
@@ -32,6 +32,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@latest
         with:
-          version: '1.11'
+          version: '1.12'
       - name: Build and deploy
         run: julia --project=docs/ docs/make-pdf.jl
