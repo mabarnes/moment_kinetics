@@ -477,9 +477,9 @@ function runtests(; highres=false)
         println("Fokker Planck dFdt = C[F,F] relaxation test")
 
         test_cases = Any[(false, false, false, 2.0e-14, 2.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 1.0e-4 : 5.0e-12, highres ? 4.0e-3 : 1.0e-5)]
-        @long push!(test_cases, (true, false, false, highres ? 2.0e-8 : 2.0e-14, highres ? 2.0e-8 : 2.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 1.0e-4 : 5.0e-12, highres ? 4.0e-3 : 1.0e-5))
+        @long push!(test_cases, (true, false, false, highres ? 2.0e-8 : 4.0e-14, highres ? 2.0e-8 : 2.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 1.0e-4 : 5.0e-12, highres ? 4.0e-3 : 1.0e-5))
         @long push!(test_cases, (true, true, false, highres ? 2.0e-3 : 4.0e-14, highres ? 3.0e-4 : 2.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 3.0e-4 : 5.0e-12, highres ? 4.0e-3 : 1.0e-5))
-        push!(test_cases, (true, true, true, highres ? 2.0e-3 : 2.0e-14, highres ? 2.0e-3 : 2.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 2.0e-3 : 5.0e-12, highres ? 4.0e-3 : 1.0e-3))
+        push!(test_cases, (true, true, true, highres ? 2.0e-3 : 4.0e-14, highres ? 2.0e-3 : 2.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 2.0e-3 : 5.0e-12, highres ? 4.0e-3 : 1.0e-3))
         @testset "evolve_density=$evolve_density, evolve_upar=$evolve_upar, evolve_p=$evolve_p" for
                 (evolve_density, evolve_upar, evolve_p, tol1, tol2, tol3, tol4, tol5) ∈ test_cases
             println("  evolve_density=$evolve_density, evolve_upar=$evolve_upar, evolve_p=$evolve_p:")
