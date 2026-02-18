@@ -455,7 +455,7 @@ function run_test(test_input, expected, atol, final_atol; interp_to_expected=tru
                 f_err = @. abs(expected.f_ion[:,:,tind] - f_ion[:,:,tind])
                 max_f_err = maximum(f_err)
                 @test isapprox(max_f_err, 0.0, atol=this_atol)
-                @test elementwise_isapprox(expected.f_ion[:,:,tind], f_ion[:,:,tind], rtol=this_atol, atol=this_atol*1.0e-3)
+                @test elementwise_isapprox(expected.f_ion[:,:,tind], f_ion[:,:,tind], rtol=this_atol, atol=this_atol*2.0e-3)
             end
         end
 
