@@ -456,6 +456,7 @@ function run_test(test_input, expected, atol, final_atol; interp_to_expected=tru
                 max_f_err = maximum(f_err)
                 @test isapprox(max_f_err, 0.0, atol=this_atol)
                 @test elementwise_isapprox(expected.f_ion[:,:,tind], f_ion[:,:,tind], rtol=this_atol, atol=this_atol*2.0e-3)
+println("max differences tind=$tind ", extrema(expected.f_ion[:,:,tind] .- f_ion[:,:,tind]))
             end
         end
 
