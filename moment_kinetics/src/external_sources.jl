@@ -141,10 +141,13 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
                 controller_source_profile[iz,ir] = r_amplitude[ir] * z_amplitude[iz]
             end
 
-            # Find the indices, and process rank of the point at r=0, z=0.
+            # Find the indices, and process rank of the point at r=0, z=0. If there is no point
+            # at z=0, then find the index of the first point with negative z, which is the closest
+            # point to the midpoint if the z domain is centred on zero, as it is by default.
             # The result of findfirst() will be `nothing` if the point was not found.
             PI_density_target_ir = findfirst(x->abs(x)<1.e-14, r.grid)
-            PI_density_target_iz = findfirst(x->abs(x)<1.e-14, z.grid)
+            PI_density_target_iz = something(findfirst(x->abs(x)<1.e-14, z.grid),
+                                             argmax(x < 0 ? x : -Inf for x in z.grid))
             if block_rank[] == 0
                 # Only need to do communications from the root process of each
                 # shared-memory block
@@ -160,8 +163,8 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
                 if PI_density_target_rank == 0 && iblock_index[] == 0 &&
                         (PI_density_target_ir === nothing ||
                          PI_density_target_iz === nothing)
-                    error("No grid point with r=0 and z=0 was found for the "
-                          * "'density_midpoint' controller.")
+                    error("No grid point with r=0 and z=0 (or, failing that, negative z "
+                          * "grid point) was found for the 'density_midpoint' controller.")
                 end
             else
                 PI_density_target_rank = nothing
@@ -188,10 +191,13 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
                 controller_source_profile[iz,ir] = r_amplitude[ir] * z_amplitude[iz]
             end
 
-            # Find the indices, and process rank of the point at r=0, z=0.
+            # Find the indices, and process rank of the point at r=0, z=0. If there is no point
+            # at z=0, then find the index of the first point with negative z, which is the closest
+            # point to the midpoint if the z domain is centred on zero, as it is by default.
             # The result of findfirst() will be `nothing` if the point was not found.
             PI_temperature_target_ir = findfirst(x->abs(x)<1.e-14, r.grid)
-            PI_temperature_target_iz = findfirst(x->abs(x)<1.e-14, z.grid)
+            PI_temperature_target_iz = something(findfirst(x->abs(x)<1.e-14, z.grid),
+                                                 argmax(x < 0 ? x : -Inf for x in z.grid))
             if block_rank[] == 0
                 # Only need to do communications from the root process of each
                 # shared-memory block
@@ -207,8 +213,8 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
                 if PI_temperature_target_rank == 0 && iblock_index[] == 0 &&
                         (PI_temperature_target_ir === nothing ||
                          PI_temperature_target_iz === nothing)
-                    error("No grid point with r=0 and z=0 was found for the "
-                          * "'temperature_midpoint' controller.")
+                    error("No grid point with r=0 and z=0 (or, failing that, negative z "
+                          * "grid point) was found for the 'density_midpoint' controller.")
                 end
             else
                 PI_temperature_target_rank = nothing
@@ -336,10 +342,13 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
                 controller_source_profile[iz,ir] = r_amplitude[ir] * z_amplitude[iz]
             end
 
-            # Find the indices, and process rank of the point at r=0, z=0.
+            # Find the indices, and process rank of the point at r=0, z=0. If there is no point
+            # at z=0, then find the index of the first point with negative z, which is the closest
+            # point to the midpoint if the z domain is centred on zero, as it is by default.
             # The result of findfirst() will be `nothing` if the point was not found.
             PI_density_target_ir = findfirst(x->abs(x)<1.e-14, r.grid)
-            PI_density_target_iz = findfirst(x->abs(x)<1.e-14, z.grid)
+            PI_density_target_iz = something(findfirst(x->abs(x)<1.e-14, z.grid),
+                                             argmax(x < 0 ? x : -Inf for x in z.grid))
             if block_rank[] == 0
                 # Only need to do communications from the root process of each
                 # shared-memory block
@@ -355,8 +364,8 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
                 if PI_density_target_rank == 0 && iblock_index[] == 0 &&
                         (PI_density_target_ir === nothing ||
                          PI_density_target_iz === nothing)
-                    error("No grid point with r=0 and z=0 was found for the "
-                          * "'density_midpoint' controller.")
+                    error("No grid point with r=0 and z=0 (or, failing that, negative z "
+                          * "grid point) was found for the 'density_midpoint' controller.")
                 end
             else
                 PI_density_target_rank = nothing
@@ -570,9 +579,17 @@ function get_source_profile(profile_type, width, relative_minimum, coord)
         L = coord.L
         return @. (1.0 - relative_minimum) * exp(-(x+0.5*L) / width) + relative_minimum +
                   (1.0 - relative_minimum) * exp(-(0.5*L-x) / width) + relative_minimum
+    elseif profile_type == "wall_exp_decay_coupled_PI"
+        x = coord.grid
+        L = coord.L
+        return @. ((1.0 - relative_minimum) * exp(-(x+0.5*L) / width) + relative_minimum +
+                  (1.0 - relative_minimum) * exp(-(0.5*L-x) / width) + relative_minimum)*12.5/width
     elseif profile_type == "super_gaussian_4"
         x = coord.grid
         return @. (1.0 - relative_minimum) * exp(-(x / width)^4) + relative_minimum
+    elseif profile_type == "super_gaussian_4_coupled_PI"
+        x = coord.grid
+        return @. ((1.0 - relative_minimum) * exp(-(x / width)^4) + relative_minimum)*0.3
     elseif profile_type == "sinusoid"
         # Set so that profile can be 1 on the inner/lower boundary
         x = coord.grid
