@@ -61,7 +61,7 @@ function select_slice(variable::AbstractArray{T,3}, dims::Symbol...; input=nothi
 
     if it !== nothing
         it0 = it
-    elseif input === nothing || :it0 ∉ keys(input)
+    elseif input === nothing || :it0 ∉ keys(input) || input.it0 == -1
         it0 = size(variable, 3)
     else
         it0 = input.it0
@@ -101,7 +101,7 @@ function select_slice(variable::AbstractArray{T,4}, dims::Symbol...; input=nothi
 
     if it !== nothing
         it0 = it
-    elseif input === nothing || :it0 ∉ keys(input)
+    elseif input === nothing || :it0 ∉ keys(input) || input.it0 == -1
         it0 = size(variable, 4)
     else
         it0 = input.it0
@@ -143,7 +143,7 @@ function select_slice(variable::AbstractArray{T,5}, dims::Symbol...; input=nothi
 
     if it !== nothing
         it0 = it
-    elseif input === nothing || :it0 ∉ keys(input)
+    elseif input === nothing || :it0 ∉ keys(input) || input.it0 == -1
         it0 = size(variable, 5)
     else
         it0 = input.it0
@@ -204,7 +204,7 @@ function select_slice(variable::AbstractArray{T,6}, dims::Symbol...; input=nothi
 
     if it !== nothing
         it0 = it
-    elseif input === nothing || :it0 ∉ keys(input)
+    elseif input === nothing || :it0 ∉ keys(input) || input.it0 == -1
         it0 = size(variable, 6)
     else
         it0 = input.it0
@@ -266,7 +266,7 @@ function select_slice(variable::AbstractArray{T,7}, dims::Symbol...; input=nothi
 
     if it !== nothing
         it0 = it
-    elseif input === nothing || :it0 ∉ keys(input)
+    elseif input === nothing || :it0 ∉ keys(input) || input.it0 == -1
         it0 = size(variable, 7)
     else
         it0 = input.it0
@@ -364,7 +364,7 @@ function get_dimension_slice_indices(keep_dims...; run_info, input, it=nothing,
     if isa(input, AbstractDict)
         input = Dict_to_NamedTuple(input)
     end
-    return (:it=>(it === nothing ? (:t ∈ keep_dims ? nothing : input.it0) : it),
+    return (:it=>(it === nothing ? (:t ∈ keep_dims ? nothing : (input.it0 == -1 ? run_info.nt : input.it0)) : it),
             :is=>(is === nothing ? (:s ∈ keep_dims ? nothing : input.is0) : is),
             :ir=>(ir === nothing ? (:r ∈ keep_dims ? nothing : input.ir0) : ir),
             :iz=>(iz === nothing ? (:z ∈ keep_dims ? nothing : input.iz0) : iz),
