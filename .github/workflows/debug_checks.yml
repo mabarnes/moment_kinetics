@@ -23,7 +23,7 @@ jobs:
         with:
           version: '1.11'
           arch: x64
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@v3
       - name: Debug test
         run: |
           # Hard code the debug level so that we can run without using the
