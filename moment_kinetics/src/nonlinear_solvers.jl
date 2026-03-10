@@ -1402,18 +1402,20 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
             residual_func!, left_preconditioner, right_preconditioner, x, residual0,
             rhs_delta, Jv_scale_factor, inv_Jv_scale_factor, solver_type)
 
-    # To start with we use 'w' as a buffer to make a copy of residual0 to which we can apply
-    # the left-preconditioner.
     parallel_map(solver_type, (delta_x) -> delta_x, v, delta_x)
-    left_preconditioner(residual0)
 
     # This function transforms the data stored in 'v' from δx to ≈J.δx
     # If initial δx is all-zero, we can skip a right-preconditioner evaluation because it
     # would just transform all-zero to all-zero.
     approximate_Jacobian_vector_product!(v, initial_delta_x_is_zero)
 
+    # To start with we use 'w' as a buffer to make a copy of residual0 to which we can
+    # apply the left-preconditioner.
+    parallel_map(solver_type, (residual_0) -> residual_0, w, residual0)
+    left_preconditioner(w)
+
     # Now we actually set 'w' as the first Krylov vector, and normalise it.
-    parallel_map(solver_type, (residual0, v) -> -residual0 - v, w, residual0, v)
+    parallel_map(solver_type, (residual0, v) -> -residual0 - v, w, w, v)
     beta = distributed_norm(solver_type, w, norm_params...)
     parallel_map(solver_type, (w,beta) -> w/beta, select_from_V(V, 1), w, beta)
     if serial_solve
