@@ -1903,14 +1903,14 @@ source amplitude.
             if vzeta.n == 1 && vr.n == 1
                 @loop_r_z ir iz begin
                     neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
-                        (1.0/3.0 * neutral_source_settings[index].source_T_array[iz,ir] +
+                        (1.0/3.0 * neutral_source_settings.source_T_array[iz,ir] +
                          1.0/3.0 * uz[iz,ir]^2) *
                         neutral_moments.external_source_amplitude[iz,ir,index]
                 end
             else
                 @loop_r_z ir iz begin
                     neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
-                        (neutral_source_settings[index].source_T_array[iz,ir] +
+                        (neutral_source_settings.source_T_array[iz,ir] +
                          1.0/3.0 * uz[iz,ir]^2) *
                         neutral_moments.external_source_amplitude[iz,ir,index]
                 end
@@ -1927,23 +1927,23 @@ source amplitude.
             end
         end
         if moments.evolve_p
-            if vperp.n == 1
+            if vzeta.n == 1 && vr.n == 1
                 @loop_r_z ir iz begin
                     neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
-                        (1.0/3.0 * neutral_source_settings[index].source_T_array[iz,ir] +
+                        (1.0/3.0 * neutral_source_settings.source_T_array[iz,ir] +
                          1.0/3.0 * uz[iz,ir]^2 - p[iz,ir] / density[iz,ir]) *
-                        neutral_source_settings[index].source_strength *
-                        neutral_source_settings[index].r_amplitude[ir] *
-                        neutral_source_settings[index].z_amplitude[iz]
+                        neutral_source_settings.source_strength *
+                        neutral_source_settings.r_amplitude[ir] *
+                        neutral_source_settings.z_amplitude[iz]
                 end
             else
                 @loop_r_z ir iz begin
                     neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
-                        (neutral_source_settings[index].source_T_array[iz,ir] +
+                        (neutral_source_settings.source_T_array[iz,ir] +
                          1.0/3.0 * uz[iz,ir]^2 - p[iz,ir] / density[iz,ir]) *
-                        neutral_source_settings[index].source_strength *
-                        neutral_source_settings[index].r_amplitude[ir] *
-                        neutral_source_settings[index].z_amplitude[iz]
+                        neutral_source_settings.source_strength *
+                        neutral_source_settings.r_amplitude[ir] *
+                        neutral_source_settings.z_amplitude[iz]
                 end
             end
         end
@@ -1992,17 +1992,17 @@ source amplitude.
             end
         end
         if moments.evolve_p
-            if vperp.n == 1
+            if vzeta.n == 1 && vr.n == 1
                 @loop_r_z ir iz begin
                     neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
-                        (1.0/3.0 * neutral_source_settings[index].source_T_array[iz,ir] +
+                        (1.0/3.0 * neutral_source_settings.source_T_array[iz,ir] +
                          1.0/3.0 * uz[iz,ir]^2) *
                         amplitude * neutral_source_settings.controller_source_profile[iz,ir,index]
                 end
             else
                 @loop_r_z ir iz begin
                     neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
-                        (neutral_source_settings[index].source_T_array[iz,ir] +
+                        (neutral_source_settings.source_T_array[iz,ir] +
                          1.0/3.0 * uz[iz,ir]^2) *
                         amplitude * neutral_source_settings.controller_source_profile[iz,ir,index]
                 end
@@ -2027,17 +2027,17 @@ source amplitude.
             end
         end
         if moments.evolve_p
-            if vperp.n == 1
+            if vzeta.n == 1 && vr.n == 1
                 @loop_r_z ir iz begin
                     neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
-                        (1.0/3.0 * neutral_source_settings[index].source_T_array[iz,ir] +
+                        (1.0/3.0 * neutral_source_settings.source_T_array[iz,ir] +
                          1.0/3.0 * uz[iz,ir]^2) *
                         amplitude[iz,ir,index]
                 end
             else
                 @loop_r_z ir iz begin
                     neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
-                        (neutral_source_settings[index].source_T_array[iz,ir] +
+                        (neutral_source_settings.source_T_array[iz,ir] +
                          1.0/3.0 * uz[iz,ir]^2) *
                         amplitude[iz,ir,index]
                 end
@@ -2086,17 +2086,17 @@ source amplitude.
             end
         end
         if moments.evolve_p
-            if vperp.n == 1
+            if vzeta.n == 1 && vr.n == 1
                 @loop_r_z ir iz begin
                     neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
-                        (1.0/3.0 * neutral_source_settings[index].source_T_array[iz,ir] +
+                        (1.0/3.0 * neutral_source_settings.source_T_array[iz,ir] +
                          1.0/3.0 * uz[iz,ir]^2) *
                         amplitude[iz,ir,index]
                 end
             else
                 @loop_r_z ir iz begin
                     neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
-                        (neutral_source_settings[index].source_T_array[iz,ir] +
+                        (neutral_source_settings.source_T_array[iz,ir] +
                          1.0/3.0 * uz[iz,ir]^2) *
                         amplitude[iz,ir,index]
                 end
