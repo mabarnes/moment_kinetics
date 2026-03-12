@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Moment kinetic equations · moment_kinetics</title><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.045/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.24/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">moment_kinetics</a></span></div><form class="docs-search" action="../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../constraints_on_normalized_distribution_function/">Constraints on normalized distribution function</a></li><li><a class="tocitem" href="../debugging-hints/">Debugging</a></li><li><a class="tocitem" href="../developing/">Developing</a></li><li><a class="tocitem" href="../external_sources_notes/">External sources</a></li><li><a class="tocitem" href="../getting_started/">Getting started</a></li><li><a class="tocitem" href="../input_options/">Input Options</a></li><li class="is-active"><a class="tocitem" href>Moment kinetic equations</a><ul class="internal"><li><a class="tocitem" href="#Moment-equations"><span>Moment equations</span></a></li><li><a class="tocitem" href="#Kinetic-equation"><span>Kinetic equation</span></a></li></ul></li><li><a class="tocitem" href="../post_processing_notes/">Post processing</a></li><li><a class="tocitem" href="../setup_for_moment_kinetics/">Setup for <code>moment_kinetics</code> on known clusters</a></li><li><a class="tocitem" href="../shared_memory_debugging/">Shared memory debugging</a></li><li><a class="tocitem" href="../wall_boundary_conditions/">Wall boundary conditions with moment constraints</a></li><li><a class="tocitem" href="../zz_advection/"><code>advection</code></a></li><li><a class="tocitem" href="../zz_analysis/"><code>analysis</code></a></li><li><a class="tocitem" href="../zz_array_allocation/"><code>array_allocation</code></a></li><li><a class="tocitem" href="../zz_bgk/"><code>bgk</code></a></li><li><a class="tocitem" href="../zz_calculus/"><code>calculus</code></a></li><li><a class="tocitem" href="../zz_charge_exchange/"><code>charge_exchange</code></a></li><li><a class="tocitem" href="../zz_chebyshev/"><code>chebyshev</code></a></li><li><a class="tocitem" href="../zz_clenshaw_curtis/"><code>clenshaw_curtis</code></a></li><li><a class="tocitem" href="../zz_command_line_options/"><code>command_line_options</code></a></li><li><a class="tocitem" href="../zz_communication/"><code>communication</code></a></li><li><a class="tocitem" href="../zz_constants/"><code>constants</code></a></li><li><a class="tocitem" href="../zz_continuity/"><code>continuity</code></a></li><li><a class="tocitem" href="../zz_coordinates/"><code>coordinates</code></a></li><li><a class="tocitem" href="../zz_debugging/"><code>debugging</code></a></li><li><a class="tocitem" href="../zz_derivatives/"><code>derivatives</code></a></li><li><a class="tocitem" href="../zz_em_fields/"><code>em_fields</code></a></li><li><a class="tocitem" href="../zz_energy_equation/"><code>energy_equation</code></a></li><li><a class="tocitem" href="../zz_external_sources/"><code>external_sources</code></a></li><li><a class="tocitem" href="../zz_file_io/"><code>file_io</code></a></li><li><a class="tocitem" href="../zz_finite_differences/"><code>finite_differences</code></a></li><li><a class="tocitem" href="../zz_force_balance/"><code>force_balance</code></a></li><li><a class="tocitem" href="../zz_initial_conditions/"><code>initial_conditions</code></a></li><li><a class="tocitem" href="../zz_input_structs/"><code>input_structs</code></a></li><li><a class="tocitem" href="../zz_interpolation/"><code>interpolation</code></a></li><li><a class="tocitem" href="../zz_ionization/"><code>ionization</code></a></li><li><a class="tocitem" href="../zz_krook_collisions/"><code>krook_collisions</code></a></li><li><a class="tocitem" href="../zz_load_data/"><code>load_data</code></a></li><li><a class="tocitem" href="../zz_looping/"><code>looping</code></a></li><li><a class="tocitem" href="../zz_makie_post_processing/"><code>makie_post_processing</code></a></li><li><a class="tocitem" href="../zz_manufactured_solns/"><code>manufactured_solns</code></a></li><li><a class="tocitem" href="../zz_moment_constraints/"><code>moment_kinetics</code></a></li><li><a class="tocitem" href="../zz_moment_kinetics/"><code>moment_kinetics</code></a></li><li><a class="tocitem" href="../zz_moment_kinetics_input/"><code>moment_kinetics_input</code></a></li><li><a class="tocitem" href="../zz_moment_kinetics_structs/"><code>moment_kinetics_structs</code></a></li><li><a class="tocitem" href="../zz_neutral_r_advection/"><code>neutral_r_advection</code></a></li><li><a class="tocitem" href="../zz_neutral_vz_advection/"><code>neutral_vz_advection</code></a></li><li><a class="tocitem" href="../zz_neutral_z_advection/"><code>neutral_z_advection</code></a></li><li><a class="tocitem" href="../zz_numerical_dissipation/"><code>numerical_dissipation</code></a></li><li><a class="tocitem" href="../zz_plot_MMS_sequence/"><code>plot_MMS_sequence</code></a></li><li><a class="tocitem" href="../zz_plot_sequence/"><code>plot_sequence</code></a></li><li><a class="tocitem" href="../zz_post_processing/"><code>post_processing</code></a></li><li><a class="tocitem" href="../zz_post_processing_input/"><code>post_processing_input</code></a></li><li><a class="tocitem" href="../zz_quadrature/"><code>quadrature</code></a></li><li><a class="tocitem" href="../zz_r_advection/"><code>r_advection</code></a></li><li><a class="tocitem" href="../zz_reference_parameters/"><code>reference_parameters</code></a></li><li><a class="tocitem" href="../zz_scan_input/"><code>scan_input</code></a></li><li><a class="tocitem" href="../zz_source_terms/"><code>source_terms</code></a></li><li><a class="tocitem" href="../zz_time_advance/"><code>time_advance</code></a></li><li><a class="tocitem" href="../zz_type_definitions/"><code>type_definitions</code></a></li><li><a class="tocitem" href="../zz_utils/"><code>utils</code></a></li><li><a class="tocitem" href="../zz_velocity_grid_transforms/"><code>velocity_grid_transforms</code></a></li><li><a class="tocitem" href="../zz_velocity_moments/"><code>velocity_moments</code></a></li><li><a class="tocitem" href="../zz_vpa_advection/"><code>vpa_advection</code></a></li><li><a class="tocitem" href="../zz_z_advection/"><code>z_advection</code></a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Moment kinetic equations</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Moment kinetic equations</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/mabarnes/moment_kinetics/blob/master/docs/src/moment_kinetic_equations.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Moment-kinetic-equations"><a class="docs-heading-anchor" href="#Moment-kinetic-equations">Moment kinetic equations</a><a id="Moment-kinetic-equations-1"></a><a class="docs-heading-anchor-permalink" href="#Moment-kinetic-equations" title="Permalink"></a></h1><p>The following are partial notes on the derivation of the equations being solved by moment_kinetics. It would be useful to expand them with more details from the Excalibur/Neptune reports. Equation references give the report number and equation number, e.g. (TN-04;1) is equation (1) from report TN-04.pdf.</p><p>The drift kinetic equation (DKE), marginalised over <span>$v_{\perp}$</span>, for ions is, adding ionization and a source term to the form in (TN-04;1),</p><p class="math-container">\[\begin{equation}
+  \frac{\partial f_{i}}{\partial t}
+  +v_{\|}\frac{\partial f_{i}}{\partial z}
+  -\frac{e}{m}\frac{\partial\phi}{\partial z}\frac{\partial f_{i}}{\partial v_{\|}}
+  = -R_{\mathrm{in}}\left(n_{n}f_{i}-n_{i}f_{n}\right)+R_{\mathrm{ion}}n_{i}f_{n}
+    + S_i,
+\end{equation}\]</p><p>and for neutrals, adding ionization and a source term to (TN-04;2)</p><p class="math-container">\[\begin{equation}
+  \frac{\partial f_{n}}{\partial t}
+  +v_{\|}\frac{\partial f_{n}}{\partial z}
+  = -R_{\mathrm{in}}\left(n_{i}f_{n}-n_{n}f_{i}\right)-R_{\mathrm{ion}}n_{i}f_{n}
+    + S_n.
+\end{equation}\]</p><p>Using the normalizations (TN04;5-11)</p><p class="math-container">\[\begin{align}
+  \tilde{f}_{s} &amp; \doteq f_{s}\frac{c_{s}\sqrt{\pi}}{N_{e}}\\
+  \tilde{t} &amp; \doteq t\frac{c_{s}}{L_{z}}\\
+  \tilde{z} &amp; \doteq\frac{z}{L_{z}}\\
+  \tilde{v}_{\|} &amp; \doteq\frac{v_{\|}}{c_{s}}\\
+  \tilde{n}_{s} &amp; \doteq\frac{n_{s}}{N_{e}}\\
+  \tilde{\phi} &amp; \doteq\frac{e\phi}{T_{e}}\\
+  \tilde{R}_{\mathrm{in}} &amp; \doteq R_{\mathrm{in}}\frac{N_{e}L_{z}}{c_{s}}\\
+  \tilde{R}_{\mathrm{ion}} &amp; \doteq R_{\mathrm{ion}}\frac{N_{e}L_{z}}{c_{s}}
+  \tilde{S}_i = S_i \frac{c_s\sqrt{\pi}}{N_e} \frac{L_z}{c_s} = S_i \frac{L_z\sqrt{\pi}}{N_e}
+\end{align}\]</p><p>with <span>$c_{s}\doteq\sqrt{2T_{e}/m_{s}}$</span> where <span>$L_{z}$</span>, <span>$N_{e}$</span> and <span>$T_{e}$</span> are constant reference parameters, the ion DKE is</p><p class="math-container">\[\begin{equation}
+  \frac{\partial\tilde{f}_{i}}{\partial\tilde{t}}
+  + \tilde{v}_{\|}\frac{\partial\tilde{f}_{i}}{\partial\tilde{z}}
+  - \frac{1}{2}\frac{\partial\tilde{\phi}}{\partial\tilde{z}}
+    \frac{\partial\tilde{f}_{i}}{\partial\tilde{v}_{\|}}
+  = -\tilde{R}_{in}\left(\tilde{n}_{n}\tilde{f}_{i}-\tilde{n}_{i}\tilde{f}_{n}\right)
+    + \tilde{R}_{\mathrm{ion}}\tilde{n}_{i}\tilde{f}_{n}
+    + \tilde{S}_i
+\end{equation}\]</p><p>and the neutral DKE is</p><p class="math-container">\[\begin{equation}
+  \frac{\partial\tilde{f}_{n}}{\partial\tilde{t}}
+  + v_{\|}\frac{\partial\tilde{f}_{n}}{\partial\tilde{z}}
+  = -\tilde{R}_{in}\left(\tilde{n}_{i}\tilde{f}_{n}-\tilde{n}_{n}\tilde{f}_{i}\right)
+    - \tilde{R}_{\mathrm{ion}}\tilde{n}_{i}\tilde{f}_{n}
+    + \tilde{S}_n.
+\end{equation}\]</p><h2 id="Moment-equations"><a class="docs-heading-anchor" href="#Moment-equations">Moment equations</a><a id="Moment-equations-1"></a><a class="docs-heading-anchor-permalink" href="#Moment-equations" title="Permalink"></a></h2><p>Recalling the definitions (TN-04;15,29,63-66), but writing the integral in the energy equation over <span>$\tilde{v}_{\|}$</span> instead of <span>$w_{\|}$</span>,</p><p class="math-container">\[\begin{align}
+  \tilde{n}_{s}
+  &amp; = \frac{1}{\sqrt{\pi}}\int d\tilde{v}_{\|}\tilde{f}_{s}\\
+
+  \tilde{n}_{s}\tilde{u}_{s}
+  &amp; = \frac{1}{\sqrt{\pi}}\int d\tilde{v}_{\|}\tilde{v}_{\|}\tilde{f}_{s}\\
+
+  \tilde{p}_{\|,s}
+  &amp; = \frac{1}{\sqrt{\pi}}\int d\tilde{v}_{\|}\left(\tilde{v}_{\|}
+      - \tilde{u}_{s}\right)^{2}\tilde{f}_{s}
+    = \int d\tilde{v}_{\|}\tilde{v}_{\|}^{2}\tilde{f}_{s}
+      - \tilde{n}_{s}\tilde{u}_{s}^{2}\\
+
+  \tilde{q}_{\|,s}
+  &amp; = \frac{1}{\sqrt{\pi}}\int d\tilde{v}_{\|}
+      \left(\tilde{v}_{\|}-\tilde{u}_{s}\right)^{3}\tilde{f}_{s}
+\end{align}\]</p><details>
+<summary style="text-align:center">[ intermediate steps ]</summary><p class="math-container">\[\begin{align*}
+  \tilde{q}_{\|,s}
+   &amp; = \frac{1}{\sqrt{\pi}}\int d\tilde{v}_{\|}\tilde{v}_{\|}^{3}\tilde{f}_{s}
+       - 3\tilde{u}_{s}\frac{1}{\sqrt{\pi}}\int dv_{\|}v_{\|}^{2}f_{s}
+       + 3u_{s}^{2}\frac{1}{\sqrt{\pi}}\int dv_{\|}v_{\|}f_{s}
+       - u_{s}^{3}\frac{1}{\sqrt{\pi}}\int dv_{\|}f_{s} \\
+
+   &amp; = \frac{1}{\sqrt{\pi}}\int d\tilde{v}_{\|}\tilde{v}_{\|}^{3}\tilde{f}_{s}
+       - 3\tilde{u}_{s}\left(\tilde{p}_{\|,s}+\tilde{n}_{s}\tilde{u}_{s}^{2}\right)
+       + 3\tilde{u}_{s}^{2}\tilde{n}_{s}\tilde{u}_{s}-\tilde{u}_{s}^{3}\tilde{n}_{s}
+\end{align*}\]</p></details><p class="math-container">\[\begin{equation}
+  \tilde{q}_{\|,s}
+    = \frac{1}{\sqrt{\pi}}\int d\tilde{v}_{\|}\tilde{v}_{\|}^{3}\tilde{f}_{s}
+       - 3\tilde{u}_{s}\tilde{p}_{\|,s}
+       - \tilde{n}_{s}\tilde{u}_{s}^{3}
+\end{equation}\]</p><p>we can take moments of the ion DKE to give ion moment equations (dropping tildes from here on)</p><p class="math-container">\[\begin{align}
+  \frac{\partial n_{i}}{\partial t}+\frac{\partial\left(n_{i}u_{i}\right)}{\partial z}
+  &amp; = -R_{in}\left(n_{n}n_{i}-n_{i}n_{n}\right)+R_{\mathrm{ion}}n_{i}n_{n}
+      + \int dv_\parallel S_i\\
+
+  &amp; = R_{\mathrm{ion}}n_{i}n_{n} + \int dv_\parallel S_i
+\end{align}\]</p><p class="math-container">\[\begin{equation}
+  \frac{\partial\left(n_{i}u_{i}\right)}{\partial t} + \frac{\partial\left(p_{\|,i}
+  + n_{i}u_{i}^{2}\right)}{\partial z} + \frac{1}{2}\frac{\partial\phi}{\partial z}n_{i}
+  = -R_{in}\left(n_{n}n_{i}u_{i} - n_{i}n_{n}u_{n}\right)
+    + R_{\mathrm{ion}}n_{i}n_{n}u_{n} \\
+\end{equation}\]</p><details>
+<summary style="text-align:center">[ intermediate steps ]</summary><p class="math-container">\[\begin{align*}
+  n_{i}\frac{\partial u_{i}}{\partial t} + u_{i}\frac{\partial n_{i}}{\partial t}
+  + \frac{\partial p_{\|,i}}{\partial z}
+  + u_{i}\frac{\partial\left(n_{i}u_{i}\right)}{\partial z}
+  + n_{i}u_{i}\frac{\partial u_{i}}{\partial z}
+  + \frac{1}{2}\frac{\partial\phi}{\partial z}n_{i}
+  &amp; = -R_{in}\left(n_{n}n_{i}u_{i} - n_{i}n_{n}u_{n}\right)
+      + R_{\mathrm{ion}}n_{i}n_{n}u_{n} \\
+
+  n_{i}\frac{\partial u_{i}}{\partial t}
+  + u_{i}\left(R_{\mathrm{ion}}n_{i}n_{n} + \int dv_\parallel S_{i}\right)
+  + \frac{\partial p_{\|,i}}{\partial z} + n_{i}u_{i}\frac{\partial u_{i}}{\partial z}
+  + \frac{1}{2}\frac{\partial\phi}{\partial z}n_{i}
+  &amp; = -R_{in}\left(n_{n}n_{i}u_{i} - n_{i}n_{n}u_{n}\right)
+      + R_{\mathrm{ion}}n_{i}n_{n}u_{n} \\
+\end{align*}\]</p></details><p class="math-container">\[\begin{equation}
+  \frac{\partial u_{i}}{\partial t} + \frac{1}{n_{i}}\frac{\partial p_{\|,i}}{\partial z}
+  + u_{i}\frac{\partial u_{i}}{\partial z} + \frac{1}{2}\frac{\partial\phi}{\partial z}
+  = -R_{in}n_{n}\left(u_{i}-u_{n}\right)
+    + R_{\mathrm{ion}}\frac{n_{i}n_{n}}{n_{s}}\left(u_{n}-u_{i}\right)
+    - \frac{u_{i}}{n_{i}} \int dv_\parallel S_{i}
+\end{equation}\]</p><p class="math-container">\[\begin{align}
+  &amp; \frac{\partial\left(p_{\|,i} + n_{i}u_{i}^{2}\right)}{\partial t}
+    + \frac{\partial\left(q_{\|,i} + 3u_{i}p_{\|,i}
+    + n_{i}u_{i}^{3}\right)}{\partial z} + \frac{\partial\phi}{\partial z}n_{i}u_{i} \\
+  &amp; = -R_{in}\left(n_{n}\left(p_{\|,i} + n_{i}u_{i}^{2}\right)
+      - n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right)\right)
+      + R_{\mathrm{ion}}n_{i}\left(p_{\|,n}+n_{n}u_{n}^{2}\right)
+      + \int dv_\parallel v_\parallel^2 S_{i} \\
+\end{align}\]</p><details>
+<summary style="text-align:center">[ intermediate steps ]</summary><p class="math-container">\[\begin{align*}
+  \frac{\partial p_{\|,i}}{\partial t}
+  + \frac{1}{n_{i}}\frac{\partial\left(n_{i}u_{i}\right)^{2}}{\partial t}
+  - \frac{\left(n_{i}u_{i}\right)^{2}}{n_{i}^{2}}\frac{\partial n_{i}}{\partial t}
+  + \frac{\partial\left(q_{\|,i} + 3u_{i}p_{\|,i}
+  + n_{i}u_{i}^{3}\right)}{\partial z} + \frac{\partial\phi}{\partial z}n_{i}u_{i}
+  &amp; = -R_{in}\left(n_{n}\left(p_{\|,i} + n_{i}u_{i}^{2}\right)
+                   - n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right)\right)
+      + R_{\mathrm{ion}}n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right)
+      + \int dv_\parallel v_\parallel^2 S_{i} \\
+
+  \frac{p_{\|,i}}{\partial t} + 2u_{i}\frac{\partial n_{i}u_{i}}{\partial t}
+  - u_{i}^{2}\frac{\partial n_{i}}{\partial t} + \frac{\partial\left(q_{\|,i}
+  + 3u_{i}p_{\|,i} + n_{i}u_{i}^{3}\right)}{\partial z}
+  + \frac{\partial\phi}{\partial z}n_{i}u_{i}
+  &amp; = -R_{in}\left(n_{n}\left(p_{\|,i} + n_{i}u_{i}^{2}\right)
+      - n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right)\right)
+      + R_{\mathrm{ion}}n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right)
+      + \int dv_\parallel v_\parallel^2 S_{i} \\
+
+  \frac{\partial p_{\|,i}}{\partial t} + 2u_{i}\left(-\frac{\partial p_{\|,i}}{\partial z}
+  - \frac{\partial\left(n_{i}u_{i}^{2}\right)}{\partial z}
+  - \frac{1}{2}\frac{\partial\phi}{\partial z}n_{i}
+  - R_{in}\left(n_{n}n_{i}u_{i} - n_{i}n_{n}u_{n}\right)
+  + R_{\mathrm{ion}}n_{i}n_{n}u_{n}\right) \\
+  -u_{i}^{2}\left(-\frac{\partial\left(n_{i}u_{i}\right)}{\partial z}
+  + R_{\mathrm{ion}}n_{i}n_{n} + \int dv_\parallel S_{i}\right)
+  + \frac{\partial q_{\|,i}}{\partial z}
+  + \frac{\partial\left(3u_{i}p_{\|,i}\right)}{\partial z}
+  + \frac{\partial\left(n_{i}u_{i}^{3}\right)}{\partial z}
+  + \frac{\partial\phi}{\partial z}n_{i}u_{i}
+  &amp; = -R_{in}\left(n_{n}\left(p_{\|,i} + n_{i}u_{i}^{2}\right)
+      - n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right)\right)
+      + R_{\mathrm{ion}}n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right)
+      + \int dv_\parallel v_\parallel^2 S_{i} \\
+
+  \frac{\partial p_{\|,i}}{\partial t} + u_{i}\frac{\partial p_{\|,i}}{\partial z}
+  + 3p_{\|,i}\frac{\partial u_{i}}{\partial z} + \frac{\partial q_{\|,i}}{\partial z}
+  &amp; = -R_{in}\left(n_{n}\left(p_{\|,i} + n_{i}u_{i}^{2}\right) - n_{i}\left(p_{\|,n}
+      + n_{n}u_{n}^{2}\right) - 2u_{i}\left(n_{n}n_{i}u_{i} - n_{i}n_{n}u_{n}\right)\right) \\
+      &amp; \quad + R_{\mathrm{ion}}n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2} + n_{n}u_{i}^{2}
+      - 2n_{n}u_{i}u_{n}\right)
+      + \int dv_\parallel v_\parallel^2 S_{i} + u_{i}^2 \int dv_\parallel S_{i} \\
+
+  \frac{\partial p_{\|,i}}{\partial t} + u_{i}\frac{\partial p_{\|,i}}{\partial z}
+  + 3p_{\|,i}\frac{\partial u_{i}}{\partial z} + \frac{\partial q_{\|,i}}{\partial z}
+  &amp; = -R_{in}\left(n_{n}p_{\|,i} - n_{i}p_{\|,n} - n_{i}n_{n}\left(u_{i}^{2} + u_{n}^{2}
+      - 2u_{i}u_{n}\right)\right) + R_{\mathrm{ion}}n_{i}\left(p_{\|,n} + n_{n}\left(u_{n}
+      - u_{i}\right)^{2}\right) \\
+      &amp; \quad + \int dv_\parallel v_\parallel^2 S_{i} + u_{i}^2 \int dv_\parallel S_{i} \\
+\end{align*}\]</p></details><p class="math-container">\[\begin{align}
+  &amp; \frac{\partial p_{\|,i}}{\partial t} + u_{i}\frac{\partial p_{\|,i}}{\partial z}
+    + 3p_{\|,i}\frac{\partial u_{i}}{\partial z} + \frac{\partial q_{\|,i}}{\partial z} \\
+  &amp; = -R_{in}\left(n_{n}p_{\|,i} - n_{i}p_{\|,n}
+      - n_{i}n_{n}\left(u_{i} - u_{n}\right)^{2}\right)
+      + R_{\mathrm{ion}}n_{i}\left(p_{\|,n} + n_{n}\left(u_{n} - u_{i}\right)^{2}\right) \\
+      &amp; \quad + \int dv_\parallel v_\parallel^2 S_{i} + u_{i}^2 \int dv_\parallel S_{i} \\
+\end{align}\]</p><p>and of the neutral DKE to give neutral moment equations</p><p class="math-container">\[\begin{align}
+  \frac{\partial n_{n}}{\partial t} + \frac{\partial\left(n_{n}u_{n}\right)}{\partial z}
+  &amp; = -R_{i}\left(n_{i}n_{n} - n_{n}n_{i}\right) - R_{\mathrm{ion}}n_{i}n_{n}
+      + \int dv_\parallel S_{n} \\
+
+  &amp; =-R_{\mathrm{ion}}n_{i}n_{n} + \int dv_\parallel S_{n}
+\end{align}\]</p><p class="math-container">\[\begin{equation}
+  \frac{\partial\left(n_{n}u_{n}\right)}{\partial t}
+  + \frac{\partial\left(p_{\|,n} + n_{n}u_{n}^{2}\right)}{\partial z}
+  = -R_{in}\left(n_{i}n_{n}u_{n} - n_{n}n_{i}u_{i}\right)
+    - R_{\mathrm{ion}}n_{i}n_{n}u_{n} \\
+\end{equation}\]</p><details>
+<summary style="text-align:center">[ intermediate steps ]</summary><p class="math-container">\[\begin{align}
+  n_{n}\frac{\partial u_{n}}{\partial t} + u_{n}\frac{\partial n_{n}}{\partial t}
+  + \frac{\partial p_{\|,n}}{\partial z}
+  + u_{n}\frac{\partial\left(n_{n}u_{n}\right)}{\partial z}
+  + n_{n}u_{n}\frac{\partial u_{n}}{\partial z}
+  &amp; = -R_{in}\left(n_{i}n_{n}u_{n} - n_{n}n_{i}u_{i}\right)
+      - R_{\mathrm{ion}}n_{i}n_{n}u_{n} \\
+
+  n_{n}\frac{\partial u_{n}}{\partial t}
+  + u_{n}\left(-R_{\mathrm{ion}}n_{i}n_{n} + \int dv_\parallel S_{n}\right)
+  + \frac{\partial p_{\|,n}}{\partial z}
+  + n_{n}u_{s}\frac{\partial u_{n}}{\partial z}
+  &amp; = -R_{in}\left(n_{i}n_{n}u_{n} - n_{n}n_{i}u_{i}\right)
+      - R_{\mathrm{ion}}n_{i}n_{n}u_{n} \\
+\end{align}\]</p></details><p class="math-container">\[\begin{equation}
+  \frac{\partial u_{n}}{\partial t} + \frac{1}{n_{n}}\frac{\partial p_{\|,n}}{\partial z}
+  + u_{n}\frac{\partial u_{n}}{\partial z}
+  = -R_{in}n_{i}\left(u_{n} - u_{i}\right) - \frac{u_{n}}{n_{n}} \int dv_\parallel S_{n}
+\end{equation}\]</p><p class="math-container">\[\begin{align}
+  &amp; \frac{\partial\left(p_{\|,n} + n_{n}u_{n}^{2}\right)}{\partial t}
+    + \frac{\partial\left(q_{\|,n} + 3u_{n}p_{\|,n}
+    + n_{n}u_{n}^{3}\right)}{\partial z} + q_{n}\frac{\partial\phi}{\partial z}n_{n}u_{n} \\
+  &amp; = -R_{in}\left(n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right) - n_{n}\left(p_{\|,i}
+      + n_{i}u_{i}^{2}\right)\right)
+      - R_{\mathrm{ion}}n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right)
+      + \int dv_\parallel v_\parallel^2 S_{n} \\
+\end{align}\]</p><details>
+<summary style="text-align:center">[ intermediate steps ]</summary><p class="math-container">\[\begin{align*}
+  \frac{\partial p_{\|,n}}{\partial t}
+  + \frac{1}{n_{n}}\frac{\partial\left(n_{n}u_{n}\right)^{2}}{\partial t}
+  - \frac{\left(n_{n}u_{n}\right)^{2}}{n_{n}^{2}}\frac{\partial n_{n}}{\partial t}
+  + \frac{\partial\left(q_{\|,n} + 3u_{n}p_{\|,n} + n_{n}u_{n}^{3}\right)}{\partial z}
+  + q_{n}\frac{\partial\phi}{\partial z}n_{n}u_{n}
+  &amp; =-R_{in}\left(n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right) - n_{n}\left(p_{\|,i}
+      + n_{i}u_{i}^{2}\right)\right)
+      - R_{\mathrm{ion}}n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right)
+      + \int dv_\parallel v_\parallel^2 S_{n} \\
+
+  \frac{\partial p_{\|,n}}{\partial t} + 2u_{n}\frac{\partial n_{n}u_{n}}{\partial t}
+  - u_{n}^{2}\frac{\partial n_{n}}{\partial t} + \frac{\partial\left(q_{\|,n}
+  + 3u_{n}p_{\|,n} + n_{n}u_{n}^{3}\right)}{\partial z}
+  + q_{n}\frac{\partial\phi}{\partial z}n_{n}u_{n}
+  &amp; = -R_{in}\left(n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right) - n_{n}\left(p_{\|,i}
+      + n_{i}u_{i}^{2}\right)\right) - R_{\mathrm{ion}}n_{i}\left(p_{\|,n}
+      + n_{n}u_{n}^{2}\right)
+      + \int dv_\parallel v_\parallel^2 S_{n} \\
+
+  \frac{\partial p_{\|,n}}{\partial t}
+  + 2u_{n}\left(-\frac{\partial p_{\|,n}}{\partial z}
+  - \frac{\partial\left(n_{n}u_{n}^{2}\right)}{\partial z}
+  - \frac{q_{n}}{2}\frac{\partial\phi}{\partial z}n_{n}
+  - R_{in}\left(n_{i}n_{n}u_{n} - n_{n}n_{i}u_{i}\right)
+  - R_{\mathrm{ion}}n_{i}n_{n}u_{n}\right) \\
+  - u_{n}^{2}\left(-\frac{\partial\left(n_{n}u_{n}\right)}{\partial z}
+  - R_{\mathrm{ion}}n_{i}n_{n} + \int dv_\parallel S_{n}\right)
+  + \frac{\partial q_{\|,n}}{\partial z}
+  + \frac{\partial\left(3u_{n}p_{\|,n}\right)}{\partial z}
+  + \frac{\partial\left(n_{n}u_{n}^{3}\right)}{\partial z}
+  &amp; = -R_{in}\left(n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right) - n_{n}\left(p_{\|,i}
+  + n_{i}u_{i}^{2}\right)\right)
+  - R_{\mathrm{ion}}n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right)
+  + \int dv_\parallel v_\parallel^2 S_{n} \\
+
+  \frac{\partial p_{\|,n}}{\partial t} + u_{n}\frac{\partial p_{\|,n}}{\partial z}
+  + 3p_{\|,n}\frac{\partial u_{n}}{\partial z} + \frac{\partial q_{\|,n}}{\partial z}
+  &amp; = -R_{in}\left(n_{i}\left(p_{\|,n} + n_{n}u_{n}^{2}\right) - n_{n}\left(p_{\|,i}
+      + n_{i}u_{i}^{2}\right) - 2u_{n}\left(n_{i}n_{n}u_{n}
+      - n_{n}n_{i}u_{i}\right)\right) - R_{\mathrm{ion}}n_{i}\left(p_{\|,n}
+      + n_{n}u_{n}^{2} + n_{n}u_{n}^{2} - 2n_{n}u_{n}u_{n}\right)
+      + \int dv_\parallel v_\parallel^2 S_{n} + u_{n}^2\int dv_\parallel S_{n} \\
+
+  \frac{\partial p_{\|,n}}{\partial t} + u_{n}\frac{\partial p_{\|,n}}{\partial z}
+  + 3p_{\|,n}\frac{\partial u_{n}}{\partial z} + \frac{\partial q_{\|,n}}{\partial z}
+  &amp; = -R_{in}\left(n_{i}p_{\|,n} - n_{n}p_{\|,i} - n_{n}n_{i}\left(u_{n}^{2} + u_{i}^{2}
+      - 2u_{n}u_{i}\right)\right) - R_{\mathrm{ion}}n_{i}p_{\|,n}
+      + \int dv_\parallel v_\parallel^2 S_{n} + u_{n}^2\int dv_\parallel S_{n} \\
+\end{align*}\]</p></details><p class="math-container">\[\begin{align}
+  &amp; \frac{\partial p_{\|,n}}{\partial t} + u_{n}\frac{\partial p_{\|,n}}{\partial z}
+    + 3p_{\|,n}\frac{\partial u_{n}}{\partial z} + \frac{\partial q_{\|,n}}{\partial z} \\
+  &amp; = -R_{in}\left(n_{i}p_{\|,n} - n_{n}p_{\|,i}
+      - n_{n}n_{i}\left(u_{n} - u_{i}\right)^{2}\right) - R_{\mathrm{ion}}n_{i}p_{\|,n} \\
+      &amp; \quad + \int dv_\parallel v_\parallel^2 S_{n} + u_{n}^2\int dv_\parallel S_{n} \\
+\end{align}\]</p><h2 id="Kinetic-equation"><a class="docs-heading-anchor" href="#Kinetic-equation">Kinetic equation</a><a id="Kinetic-equation-1"></a><a class="docs-heading-anchor-permalink" href="#Kinetic-equation" title="Permalink"></a></h2><p>For the moment-kinetic equation for the normalized distribution function</p><p class="math-container">\[\begin{equation}
+g_{s}(w_{\|,s})=\frac{v_{\mathrm{th},s}}{n_{s}}f_{s}(v_{\|}(w_{\|,s}))
+\end{equation}\]</p><p>we transform to the normalized velocity coordinate</p><p class="math-container">\[\begin{equation}
+w_{\|,s}=\frac{v_{\|} - u_{s}}{v_{\mathrm{th},s}}
+\end{equation}\]</p><p>The derivatives transform as</p><p class="math-container">\[\begin{align}
+  \left.\frac{\partial f_{s}}{\partial t}\right|_{z,v\|}
+  &amp; \rightarrow\left.\frac{\partial f_{s}}{\partial t}\right|_{z,w\|}
+               - \frac{1}{v_{\mathrm{th},s}}\frac{\partial u_{s}}{\partial t}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
+               - \frac{w_{\|,s}}{v_{\mathrm{th},s}}\frac{\partial v_{\mathrm{th},s}}{\partial t}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}\\
+
+  \left.\frac{\partial f_{s}}{\partial z}\right|_{z,v\|}
+  &amp; \rightarrow\left.\frac{\partial f_{s}}{\partial z}\right|_{z,w\|}
+               - \frac{1}{v_{\mathrm{th},s}}\frac{\partial u_{s}}{\partial z}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
+               - \frac{w_{\|,s}}{v_{\mathrm{th},s}}\frac{\partial v_{\mathrm{th},s}}{\partial z}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}\\
+
+  \left.\frac{\partial f_{s}}{\partial v_{\|}}\right|_{z,v\|}
+  &amp; \rightarrow\frac{1}{v_{\mathrm{th},s}}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
+\end{align}\]</p><p>We use an energy equation that evolves <span>$p_{\|,s}$</span> not <span>$v_{\mathrm{th},s}$</span>, so use</p><p class="math-container">\[\begin{align}
+  v_{\mathrm{th},s}^{2} &amp; = 2\frac{p_{\|,s}}{n_{s}} \\
+
+  \Rightarrow v_{\mathrm{th},s}\frac{\partial v_{\mathrm{th},s}}{\partial t}
+  &amp; = \frac{1}{n_{s}}\frac{\partial p_{\|,s}}{\partial t}
+      - \frac{p_{\|,s}}{n_{s}^{2}}\frac{\partial n_{s}}{\partial t}\\
+
+  v_{\mathrm{th},s}\frac{\partial v_{\mathrm{th},s}}{\partial z}
+  &amp; = \frac{1}{n_{s}}\frac{\partial p_{\|,s}}{\partial z}
+      - \frac{p_{\|,s}}{n_{s}^{2}}\frac{\partial n_{s}}{\partial z}
+\end{align}\]</p><p>to convert the transformations above to</p><p class="math-container">\[\begin{align}
+  \left.\frac{\partial f_{s}}{\partial t}\right|_{z,v\|}
+  &amp; \rightarrow\left.\frac{\partial f_{s}}{\partial t}\right|_{z,w\|}
+    - \frac{1}{v_{\mathrm{th},s}}\frac{\partial u_{s}}{\partial t}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
+    - \frac{w_{\|,s}}{v_{\mathrm{th},s}^{2}}\left(\frac{1}{n_{s}}\frac{\partial p_{\|,s}}{\partial t}
+    - \frac{p_{\|,s}}{n_{s}^{2}}\frac{\partial n_{s}}{\partial t}\right)\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}\\
+
+  &amp; = \left.\frac{\partial f_{s}}{\partial t}\right|_{z,w\|}
+      - \frac{1}{v_{\mathrm{th},s}}\frac{\partial u_{s}}{\partial t}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
+      - \frac{w_{\|,s}}{2}\left(\frac{1}{p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t}
+      - \frac{1}{n_{s}}\frac{\partial n_{s}}{\partial t}\right)\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}\\
+
+  \left.\frac{\partial f_{s}}{\partial z}\right|_{z,v\|}
+  &amp; \rightarrow\left.\frac{\partial f_{s}}{\partial z}\right|_{z,w\|}
+    - \frac{1}{v_{\mathrm{th},s}}\frac{\partial u_{s}}{\partial z}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
+    - \frac{w_{\|,s}}{v_{\mathrm{th},s}^{2}}\left(\frac{1}{n_{s}}\frac{\partial p_{\|,s}}{\partial z}
+    - \frac{p_{\|,s}}{n_{s}^{2}}\frac{\partial n_{s}}{\partial z}\right)\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}\\
+
+  &amp; = \left.\frac{\partial f_{s}}{\partial z}\right|_{z,w\|}
+      - \frac{1}{v_{\mathrm{th},s}}\frac{\partial u_{s}}{\partial z}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
+      - \frac{w_{\|,s}}{2}\left(\frac{1}{p_{\|,s}}\frac{\partial p_{\|,s}}{\partial z}
+      - \frac{1}{n_{s}}\frac{\partial n_{s}}{\partial z}\right)\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}\\
+
+  \left.\frac{\partial f_{s}}{\partial v_{\|}}\right|_{z,v\|}
+  &amp; \rightarrow\frac{1}{v_{\mathrm{th},s}}\left.\frac{\partial f_{s}}{\partial w_{\|,s}}\right|_{z,w\|}
+\end{align}\]</p><p>Using these transformations gives the ion DKE in a form similar to (TN-04;55) (but writing out <span>$\dot{w}_{\|}$</span> in full here, and not using the moment equations for the moment)</p><p class="math-container">\[\begin{align}
+  &amp; \frac{\partial f_{i}}{\partial t}
+    - \frac{1}{v_{\mathrm{th},i}}\frac{\partial u_{i}}{\partial t}\frac{\partial f_{i}}{\partial w_{\|,i}}
+    - \frac{w_{\|,i}}{2}\left(\frac{1}{p_{\|,i}}\frac{\partial p_{\|,i}}{\partial t}
+    - \frac{1}{n_{i}}\frac{\partial n_{i}}{\partial t}\right)\frac{\partial f_{i}}{\partial w_{\|,i}} \\
+  &amp; + \left(v_{\mathrm{th},i}w_{\|,i} + u_{i}\right)\left(\frac{\partial f_{i}}{\partial z}
+    - \frac{1}{v_{\mathrm{th},i}}\frac{\partial u_{i}}{\partial z}\frac{\partial f_{i}}{\partial w_{\|,i}}
+    - \frac{w_{\|,i}}{2}\left(\frac{1}{p_{\|,i}}\frac{\partial p_{\|,i}}{\partial z}
+    - \frac{1}{n_{i}}\frac{\partial n_{i}}{\partial z}\right)\frac{\partial f_{i}}{\partial w_{\|,i}}\right) \\
+  &amp; - \frac{1}{2v_{\mathrm{th},i}}\frac{\partial\phi}{\partial z}\frac{\partial f_{i}}{\partial w_{\|,i}} \\
+  &amp; = -R_{in}\left(n_{n}f_{i} - n_{i}f_{n}\right) + R_{\mathrm{ion}}n_{i}f_{n} + S_{i}
+\end{align}\]</p><details>
+<summary style="text-align:center">[ intermediate steps ]</summary><p class="math-container">\[\begin{align*}
+  \frac{\partial f_{i}}{\partial t} + \left(v_{\mathrm{th},i}w_{\|,i}
+  + u_{i}\right)\frac{\partial f_{i}}{\partial z}
+  - \frac{1}{v_{\mathrm{th},i}}\frac{\partial u_{i}}{\partial t}\frac{\partial f_{i}}{\partial w_{\|,i}}
+  - \frac{w_{\|,i}}{2}\left(\frac{1}{p_{\|,i}}\frac{\partial p_{\|,i}}{\partial t}
+  - \frac{1}{n_{i}}\frac{\partial n_{i}}{\partial t}\right)\frac{\partial f_{i}}{\partial w_{\|,i}}
+  + \left(v_{\mathrm{th},i}w_{\|,i}
+  + u_{i}\right)\left(-\frac{1}{v_{\mathrm{th},i}}\frac{\partial u_{i}}{\partial z}\frac{\partial f_{i}}{\partial w_{\|,i}}
+  - \frac{w_{\|,i}}{2}\left(\frac{1}{p_{\|,i}}\frac{\partial p_{\|,i}}{\partial z}
+  - \frac{1}{n_{i}}\frac{\partial n_{i}}{\partial z}\right)\frac{\partial f_{i}}{\partial w_{\|,i}}\right)
+  - \frac{1}{2v_{\mathrm{th},i}}\frac{\partial\phi}{\partial z}\frac{\partial f_{i}}{\partial w_{\|,i}}
+  &amp; = -R_{in}\left(n_{n}f_{i} - n_{i}f_{n}\right) + R_{\mathrm{ion}}n_{i}f_{n} + S_{i} \\
+
+  \frac{\partial f_{i}}{\partial t} + \left(v_{\mathrm{th},i}w_{\|,i}
+  + u_{i}\right)\frac{\partial f_{i}}{\partial z}
+  + \left[-\frac{1}{v_{\mathrm{th},i}}\frac{\partial u_{i}}{\partial t}
+  - \frac{w_{\|,i}}{2}\left(\frac{1}{p_{\|,i}}\frac{\partial p_{\|,i}}{\partial t}
+  - \frac{1}{n_{i}}\frac{\partial n_{i}}{\partial t}\right)
+  + \left(v_{\mathrm{th},i}w_{\|,i}
+  + u_{i}\right)\left(-\frac{1}{v_{\mathrm{th},i}}\frac{\partial u_{i}}{\partial z}
+  - \frac{w_{\|,i}}{2}\left(\frac{1}{p_{\|,i}}\frac{\partial p_{\|,i}}{\partial z}
+  - \frac{1}{n_{i}}\frac{\partial n_{i}}{\partial z}\right)\right)
+  - \frac{1}{2v_{\mathrm{th},i}}\frac{\partial\phi}{\partial z}\right]\frac{\partial f_{i}}{\partial w_{\|,i}}
+  &amp; = -R_{in}\left(n_{n}f_{i} - n_{i}f_{n}\right) + R_{\mathrm{ion}}n_{i}f_{n} + S_{i} \\
+\end{align*}\]</p></details><p class="math-container">\[\begin{align}
+  &amp; \frac{\partial f_{i}}{\partial t} + \left(v_{\mathrm{th},i}w_{\|,i}
+    + u_{i}\right)\frac{\partial f_{i}}{\partial z} \\
+  &amp; + \left[-\frac{1}{v_{\mathrm{th},i}}\left(\frac{\partial u_{i}}{\partial t}
+    + \left(v_{\mathrm{th},i}w_{\|,i} + u_{i}\right)\frac{\partial u_{i}}{\partial z}
+    + \frac{1}{2}\frac{\partial\phi}{\partial z}\right)\right. \\
+  &amp; \qquad - \frac{w_{\|,i}}{2}\frac{1}{p_{\|,i}}\left(\frac{\partial p_{\|,i}}{\partial t}
+          + \left(v_{\mathrm{th},i}w_{\|,i} + u_{i}\right)\frac{\partial p_{\|,i}}{\partial z}\right) \\
+  &amp; \qquad + \frac{w_{\|,i}}{2}\frac{1}{n_{i}}\left(\frac{\partial n_{i}}{\partial t}
+          + \left(v_{\mathrm{th},i}w_{\|,i}
+          + \left.u_{i}\right)\frac{\partial n_{i}}{\partial z}\right)\right]\frac{\partial f_{i}}{\partial w_{\|,i}} \\
+  &amp; = -R_{in}\left(n_{n}f_{i} - n_{i}f_{n}\right) + R_{\mathrm{ion}}n_{i}f_{n} + S_{i}
+\end{align}\]</p><p>and the neutral DKE</p><p class="math-container">\[\begin{align}
+  &amp; \frac{\partial f_{n}}{\partial t}
+    - \frac{1}{v_{\mathrm{th},n}}\frac{\partial u_{n}}{\partial t}\frac{\partial f_{n}}{\partial w_{\|,n}}
+    - \frac{w_{\|,n}}{2}\left(\frac{1}{p_{\|,n}}\frac{\partial p_{\|,n}}{\partial t}
+    - \frac{1}{n_{n}}\frac{\partial n_{n}}{\partial t}\right)\frac{\partial f_{n}}{\partial w_{\|,n}} \\
+  &amp; + \left(v_{\mathrm{th},n}w_{\|,n} + u_{n}\right)\left(\frac{\partial f_{n}}{\partial z}
+    - \frac{1}{v_{\mathrm{th},n}}\frac{\partial u_{n}}{\partial z}\frac{\partial f_{n}}{\partial w_{\|,n}}
+    - \frac{w_{\|,n}}{2}\left(\frac{1}{p_{\|,n}}\frac{\partial p_{\|,n}}{\partial z}
+    - \frac{1}{n_{n}}\frac{\partial n_{n}}{\partial z}\right)\frac{\partial f_{n}}{\partial w_{\|,n}}\right) \\
+  &amp; = -R_{in}\left(n_{i}f_{n} - n_{n}f_{i}\right) - R_{\mathrm{ion}}n_{i}f_{n} + S_{n} \\
+\end{align}\]</p><details>
+<summary style="text-align:center">[ intermediate steps ]</summary><p class="math-container">\[\begin{align*}
+  \frac{\partial f_{n}}{\partial t} + \left(v_{\mathrm{th},n}w_{\|,n}
+  + u_{n}\right)\frac{\partial f_{n}}{\partial z}
+  - \frac{1}{v_{\mathrm{th},n}}\frac{\partial u_{n}}{\partial t}\frac{\partial f_{n}}{\partial w_{\|,n}}
+  - \frac{w_{\|,n}}{2}\left(\frac{1}{p_{\|,n}}\frac{\partial p_{\|,n}}{\partial t}
+  - \frac{1}{n_{n}}\frac{\partial n_{n}}{\partial t}\right)\frac{\partial f_{n}}{\partial w_{\|,n}}
+  + \left(v_{\mathrm{th},n}w_{\|,n}
+  + u_{n}\right)\left(-\frac{1}{v_{\mathrm{th},n}}\frac{\partial u_{n}}{\partial z}\frac{\partial f_{n}}{\partial w_{\|,n}}
+  - \frac{w_{\|,n}}{2}\left(\frac{1}{p_{\|,n}}\frac{\partial p_{\|,n}}{\partial z}
+  - \frac{1}{n_{n}}\frac{\partial n_{n}}{\partial z}\right)\frac{\partial f_{n}}{\partial w_{\|,n}}\right)
+  &amp; = -R_{in}\left(n_{i}f_{n} - n_{n}f_{i}\right) - R_{\mathrm{ion}}n_{i}f_{n} + S_{n} \\
+
+  \frac{\partial f_{n}}{\partial t} + \left(v_{\mathrm{th},n}w_{\|,n}
+  + u_{n}\right)\frac{\partial f_{n}}{\partial z}
+  + \left[-\frac{1}{v_{\mathrm{th},n}}\frac{\partial u_{n}}{\partial t}
+  - \frac{w_{\|,n}}{2}\left(\frac{1}{p_{\|,n}}\frac{\partial p_{\|,n}}{\partial t}
+  - \frac{1}{n_{n}}\frac{\partial n_{n}}{\partial t}\right) + \left(v_{\mathrm{th},n}w_{\|,n}
+  + u_{n}\right)\left(-\frac{1}{v_{\mathrm{th},n}}\frac{\partial u_{n}}{\partial z}
+  - \frac{w_{\|,n}}{2}\left(\frac{1}{p_{\|,n}}\frac{\partial p_{\|,n}}{\partial z}
+  - \frac{1}{n_{n}}\frac{\partial n_{n}}{\partial z}\right)\right)\right]\frac{\partial f_{n}}{\partial w_{\|,n}}
+  &amp; = -R_{in}\left(n_{i}f_{n} - n_{n}f_{i}\right) - R_{\mathrm{ion}}n_{i}f_{n} + S_{n} \\
+\end{align*}\]</p></details><p class="math-container">\[\begin{align}
+  &amp; \frac{\partial f_{n}}{\partial t} + \left(v_{\mathrm{th},n}w_{\|,n}
+    + u_{n}\right)\frac{\partial f_{n}}{\partial z} \\
+  &amp; + \left[-\frac{1}{v_{\mathrm{th},n}}\left(\frac{\partial u_{n}}{\partial t}
+    + \left(v_{\mathrm{th},n}w_{\|,n}+u_{n}\right)\frac{\partial u_{n}}{\partial z}\right)\right. \\
+  &amp; \qquad - \frac{w_{\|,n}}{2}\frac{1}{p_{\|,n}}\left(\frac{\partial p_{\|,n}}{\partial t}
+           + \left(v_{\mathrm{th},n}w_{\|,n} + u_{n}\right)\frac{\partial p_{\|,n}}{\partial z}\right) \\
+  &amp; \qquad + \left.\frac{w_{\|,n}}{2}\frac{1}{n_{n}}\left(\frac{\partial n_{n}}{\partial t}
+           + \left(v_{\mathrm{th},n}w_{\|,n}
+           + u_{n}\right)\frac{\partial n_{n}}{\partial z}\right)\right]\frac{\partial f_{n}}{\partial w_{\|,n}} \\
+  &amp; = -R_{in}\left(n_{i}f_{n} - n_{n}f_{i}\right) - R_{\mathrm{ion}}n_{i}f_{n} + S_{n}
+\end{align}\]</p><p>We also normalise <span>$f$</span> and write the DKEs for</p><p class="math-container">\[\begin{align}
+  g_{s} &amp; =\frac{v_{\mathrm{th,s}}}{n_{s}}f_{s} \\
+
+  \Rightarrow\frac{\partial f_{s}}{\partial t}
+  &amp; = \frac{n_{s}}{v_{\mathrm{th},s}}\frac{\partial g_{s}}{\partial t}
+  + \frac{g_{s}}{v_{\mathrm{th},s}}\frac{\partial n_{s}}{\partial t}
+  - \frac{n_{s}g_{s}}{v_{\mathrm{th},s}^{2}}\frac{\partial v_{\mathrm{th},s}}{\partial t} \\
+\end{align}\]</p><details>
+<summary style="text-align:center">[ intermediate steps ]</summary><p class="math-container">\[\begin{align*}
+  \frac{\partial f_{s}}{\partial t}
+  &amp; = \frac{n_{s}}{v_{\mathrm{th},s}}\frac{\partial g_{s}}{\partial t}
+      + \frac{g_{s}}{v_{\mathrm{th},s}}\frac{\partial n_{s}}{\partial t}
+      - \frac{n_{s}g_{s}}{v_{\mathrm{th},s}^{3}}\left(\frac{1}{n_{s}}\frac{\partial p_{\|,s}}{\partial t}
+      - \frac{p_{\|,s}}{n_{s}^{2}}\frac{\partial n_{s}}{\partial t}\right) \\
+
+  &amp; = \frac{n_{s}}{v_{\mathrm{th},s}}\frac{\partial g_{s}}{\partial t}
+      + \frac{g_{s}}{v_{\mathrm{th},s}}\frac{\partial n_{s}}{\partial t}
+      - \frac{g_{s}n_{s}}{2v_{\mathrm{th},s}p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t}
+      + \frac{g_{s}}{2v_{\mathrm{th},s}}\frac{\partial n_{s}}{\partial t} \\
+\end{align*}\]</p></details><p class="math-container">\[\begin{align}
+  \frac{\partial f_{s}}{\partial t}
+  &amp; = \frac{n_{s}}{v_{\mathrm{th},s}}\frac{\partial g_{s}}{\partial t}
+      + \frac{3g_{s}}{2v_{\mathrm{th},s}}\frac{\partial n_{s}}{\partial t}
+      - \frac{g_{s}n_{s}}{2v_{\mathrm{th},s}p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t} \\
+
+  \frac{\partial f_{s}}{\partial w_{\|,s}}
+  &amp; = \frac{n_{s}}{v_{\mathrm{th},s}}\frac{\partial g_{s}}{\partial w_{\|,s}},
+\end{align}\]</p><p>For brevity, do the following manipulations for <span>$g_{s}$</span> rather than for ions and neutrals separately by using <span>$q_{i}=1$</span>, <span>$q_{n}=0$</span> and with the <span>$+$</span>&#39;ve sign for the ion DKE and <span>$-$</span>&#39;ve sign for the neutral DKE.</p><p class="math-container">\[\begin{align}
+  &amp; \frac{n_{s}}{v_{\mathrm{th},s}}\frac{\partial g_{s}}{\partial t}
+  + \frac{3g_{s}}{2v_{\mathrm{th},s}}\frac{\partial n_{s}}{\partial t}
+  - \frac{g_{s}n_{s}}{2v_{\mathrm{th},s}p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t}
+  + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial f_{s}}{\partial z} \\
+  &amp; + \left[-\frac{1}{v_{\mathrm{th},s}}\left(\frac{\partial u_{s}}{\partial t}
+  + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial u_{s}}{\partial z}
+  + \frac{q_{s}}{2}\frac{\partial\phi}{\partial z}\right)\right. \\
+  &amp; \qquad - \frac{w_{\|,s}}{2}\frac{1}{p_{\|,s}}\left(\frac{\partial p_{\|,s}}{\partial t}
+  + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial p_{\|,s}}{\partial z}\right) \\
+  &amp; \qquad + \left.\frac{w_{\|,s}}{2}\frac{1}{n_{s}}\left(\frac{\partial n_{s}}{\partial t}
+  + \left(v_{\mathrm{th},s}w_{\|,s}
+  + u_{s}\right)\frac{\partial n_{s}}{\partial z}\right)\right]\frac{n_{s}}{v_{\mathrm{th},s}}\frac{\partial g_{s}}{\partial w_{\|,s}} \\
+  &amp; = -R_{ss&#39;}\left(n_{s&#39;}\frac{n_{s}}{v_{\mathrm{th},s}}g_{s}
+      - n_{s}\frac{n_{s&#39;}}{v_{\mathrm{th},s&#39;}}g_{s&#39;}\right)
+      \pm R_{\mathrm{ion}}n_{i}\frac{n_{n}}{v_{\mathrm{th},n}}g_{n}
+      + S_{s} \\
+\end{align}\]</p><details>
+<summary style="text-align:center">[ intermediate steps ]</summary><p class="math-container">\[\begin{align}
+  \Rightarrow &amp; \frac{\partial g_{s}}{\partial t}
+  + \frac{v_{\mathrm{th},s}}{n_{s}}\left(v_{\mathrm{th},s}w_{\|,s}
+  + u_{s}\right)\frac{\partial f_{s}}{\partial z}
+  + \frac{3g_{s}}{2n_{s}}\frac{\partial n_{s}}{\partial t}
+  - \frac{g_{s}}{2p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t} \\
+  &amp; + \left[-\frac{1}{v_{\mathrm{th},s}}\left(\frac{\partial u_{s}}{\partial t}
+  + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial u_{s}}{\partial z}
+  + \frac{q_{s}}{2}\frac{\partial\phi}{\partial z}\right)
+  - \frac{w_{\|,s}}{2}\frac{1}{p_{\|,s}}\left(\frac{\partial p_{\|,s}}{\partial t}
+  + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial p_{\|,s}}{\partial z}\right)
+  + \frac{w_{\|,s}}{2}\frac{1}{n_{s}}\left(\frac{\partial n_{s}}{\partial t}
+  + \left(v_{\mathrm{th},s}w_{\|,s}
+  + u_{s}\right)\frac{\partial n_{s}}{\partial z}\right)\right]\frac{\partial g_{s}}{\partial w_{\|,s}} \\
+  &amp; = -R_{ss&#39;}n_{s&#39;}\left(g_{s} - \frac{v_{\mathrm{th},s}}{v_{\mathrm{th},s&#39;}}g_{s&#39;}\right)
+      \pm R_{\mathrm{ion}}\frac{v_{\mathrm{th},s}}{n_{s}}n_{i}\frac{n_{n}}{v_{\mathrm{th},n}}g_{n}
+      + \frac{v_{\mathrm{th},s}}{n_{s}} S_{s} \\
+
+  \Rightarrow &amp; \frac{\partial g_{s}}{\partial t}
+  + \frac{v_{\mathrm{th},s}}{n_{s}}\left(v_{\mathrm{th},s}w_{\|,s}
+  + u_{s}\right)\frac{\partial f_{s}}{\partial z}
+  + \frac{3g_{s}}{2n_{s}}\frac{\partial n_{s}}{\partial t}
+  - \frac{g_{s}}{2p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t} \\
+  &amp; + \left[-\frac{1}{v_{\mathrm{th},s}}\left(\frac{n_{s}}{n_{s}}\frac{\partial u_{s}}{\partial t}
+  + \frac{n_{s}}{n_{s}}\left(v_{\mathrm{th},s}w_{\|,s}
+  + u_{s}\right)\frac{\partial u_{s}}{\partial z}
+  + \frac{u_{s}}{n_{s}}\left(\frac{\partial n}{\partial t}
+  + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial n}{\partial z}\right)
+  + \frac{q_{s}}{2}\frac{\partial\phi}{\partial z}\right)
+  + \frac{u_{s}}{n_{s}v_{\mathrm{th},s}}\left(\frac{\partial n}{\partial t}
+  + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial n}{\partial z}\right)
+  - \frac{w_{\|,s}}{2}\frac{1}{p_{\|,s}}\left(\frac{\partial p_{\|,s}}{\partial t}
+  + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial p_{\|,s}}{\partial z}\right)
+  + \frac{w_{\|,s}}{2}\frac{1}{n_{s}}\left(\frac{\partial n_{s}}{\partial t}
+  + \left(v_{\mathrm{th},s}w_{\|,s}
+  + u_{s}\right)\frac{\partial n_{s}}{\partial z}\right)\right]\frac{\partial g_{s}}{\partial w_{\|,s}} \\
+  &amp; = -R_{ss&#39;}n_{s&#39;}\left(g_{s} - \frac{v_{\mathrm{th},s}}{v_{\mathrm{th},s&#39;}}g_{s&#39;}\right)
+      \pm R_{\mathrm{ion}}\frac{v_{\mathrm{th},s}}{n_{s}}n_{i}\frac{n_{n}}{v_{\mathrm{th},n}}g_{n}
+      + \frac{v_{\mathrm{th},s}}{n_{s}} S_{s} \\
+\end{align}\]</p></details><p class="math-container">\[\begin{align}
+  \Rightarrow &amp; \frac{\partial g_{s}}{\partial t}
+  + \frac{v_{\mathrm{th},s}}{n_{s}}\left(v_{\mathrm{th},s}w_{\|,s}
+  + u_{s}\right)\frac{\partial f_{s}}{\partial z}
+  + \frac{3g_{s}}{2n_{s}}\frac{\partial n_{s}}{\partial t}
+  - \frac{g_{s}}{2p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t} \\
+  &amp; + \left[-\frac{1}{n_{s}v_{\mathrm{th},s}}\left(\frac{\partial n_{s}u_{s}}{\partial t}
+  + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\left(n_{s}\frac{\partial u_{s}}{\partial z}
+  + u_{s}\frac{\partial n_{s}}{\partial z}\right)
+  + \frac{q_{s}}{2}n_{s}\frac{\partial\phi}{\partial z}\right)\right. \\
+  &amp; \qquad + \frac{u_{s}}{n_{s}v_{\mathrm{th},s}}\left(\frac{\partial n_{s}}{\partial t}
+  + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial n_{s}}{\partial z}\right)
+  - \frac{w_{\|,s}}{2}\frac{1}{p_{\|,s}}\left(\frac{\partial p_{\|,s}}{\partial t}
+  + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial p_{\|,s}}{\partial z}\right) \\
+  &amp; \qquad \left.+ \frac{w_{\|,s}}{2}\frac{1}{n_{s}}\left(\frac{\partial n_{s}}{\partial t}
+  + \left(v_{\mathrm{th},s}w_{\|,s}
+  + u_{s}\right)\frac{\partial n_{s}}{\partial z}\right)\right]\frac{\partial g_{s}}{\partial w_{\|,s}} \\
+  &amp; = -R_{ss&#39;}n_{s&#39;}\left(g_{s} - \frac{v_{\mathrm{th},s}}{v_{\mathrm{th},s&#39;}}g_{s&#39;}\right)
+      \pm R_{\mathrm{ion}}\frac{v_{\mathrm{th},s}}{n_{s}}n_{i}\frac{n_{n}}{v_{\mathrm{th},n}}g_{n}
+      + \frac{v_{\mathrm{th},s}}{n_{s}} S_{s}
+\end{align}\]</p><p>So then if we use the moment equations we can rewrite the DKE as</p><p class="math-container">\[\begin{align}
+  &amp; \frac{\partial g_{s}}{\partial t}
+  + \frac{v_{\mathrm{th},s}}{n_{s}}\left(v_{\mathrm{th},s}w_{\|,s}
+  + u_{s}\right)\frac{\partial f_{s}}{\partial z}
+  + \frac{3g_{s}}{2n_{s}}\frac{\partial n_{s}}{\partial t}
+  - \frac{g_{s}}{2p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t} \\
+  &amp; + \left[-\frac{1}{n_{s}v_{\mathrm{th},s}}\left(\frac{\partial n_{s}u_{s}}{\partial t}
+  + u_{s}\left(n_{s}\frac{\partial u_{s}}{\partial z}
+  + u_{s}\frac{\partial n_{s}}{\partial z}\right)
+  - \frac{1}{2}n_{s}E_{\|}
+  + v_{\mathrm{th},s}w_{\|,s}\left(n_{s}\frac{\partial u_{s}}{\partial z}
+  + u_{s}\frac{\partial n_{s}}{\partial z}\right)\right)\right. \\
+  &amp; \qquad + \frac{u_{s}}{n_{s}v_{\mathrm{th},s}}\left(\frac{\partial n_{s}}{\partial t}
+  + u_{s}\frac{\partial n_{s}}{\partial z}
+  + v_{\mathrm{th},s}w_{\|,s}\frac{\partial n_{s}}{\partial z}\right) \\
+  &amp; \qquad-\frac{w_{\|,s}}{2}\frac{1}{p_{\|,s}}\left(\frac{\partial p_{\|,s}}{\partial t}
+  + u_{s}\frac{\partial p_{\|,s}}{\partial z}
+  + v_{\mathrm{th},s}w_{\|,s}\frac{\partial p_{\|,s}}{\partial z}\right) \\
+  &amp; \qquad\left. + \frac{w_{\|,s}}{2}\frac{1}{n_{s}}\left(\frac{\partial n_{s}}{\partial t}
+  + u_{s}\frac{\partial n_{s}}{\partial z}
+  + v_{\mathrm{th},s}w_{\|,s}\frac{\partial n_{s}}{\partial z}\right)\right]\frac{\partial g_{s}}{\partial w_{\|,s}} \\
+  &amp; = -R_{ss&#39;}n_{s&#39;}\left(g_{s} - \frac{v_{\mathrm{th},s}}{v_{\mathrm{th},s&#39;}}g_{s&#39;}\right)
+      \pm R_{\mathrm{ion}}\frac{v_{\mathrm{th},s}}{n_{s}}n_{i}\frac{n_{n}}{v_{\mathrm{th},n}}g_{n}
+      + \frac{v_{\mathrm{th},s}}{n_{s}} S_{s} \\
+\end{align}\]</p><details>
+<summary style="text-align:center">[ intermediate steps ]</summary><p class="math-container">\[\begin{align*}
+  \Rightarrow &amp; \frac{\partial g_{s}}{\partial t}
+  + \frac{v_{\mathrm{th},s}}{n_{s}}\left(v_{\mathrm{th},s}w_{\|,s}
+  + u_{s}\right)\frac{\partial f_{s}}{\partial z}
+  + \frac{3g_{s}}{2n_{s}}\left(\pm R_{\mathrm{ion}}n_{i}n_{n} + \int dv_\parallel S_{s}
+  - u_{s}\frac{\partial n_{s}}{\partial z}
+  - n_{s}\frac{\partial u_{s}}{\partial z}\right) \\
+  &amp; -\frac{g_{s}}{2p_{\|,s}}\left(-u_{s}\frac{\partial p_{\|,s}}{\partial z}
+  - \frac{\partial q_{\|,s}}{\partial z}
+  - 3p_{\|,s}\frac{\partial u_{s}}{\partial z}
+  - R_{ss&#39;}\left(n_{s&#39;}p_{\|,s} - n_{s}p_{\|,s&#39;}
+  - m_{s}n_{s}n_{s&#39;}\left(u_{s} - u_{s&#39;}\right)^{2}\right)
+  \pm R_{\mathrm{ion}}n_{i}\left(p_{\|,n} + m_{s}n_{n}\left(u_{n} - u_{s}\right)^{2}\right)
+  + \int dv_\parallel v_\parallel^2 S_{s} + u_{s}^2 \int dv_\parallel S_{s} \right) \\
+  &amp; + \left[-\frac{1}{n_{s}v_{\mathrm{th},s}}\left(-\underbrace{\cancel{n_{s}u_{s}\frac{\partial u_{s}}{\partial z}}}_{A}
+  - \frac{\partial p_{\|,s}}{\partial z}
+  + R_{ss&#39;}n_{s}n_{s&#39;}\left(u_{s&#39;} - u_{s}\right)
+  \pm R_{\mathrm{ion}}n_{i}n_{n}u_{n}
+  + v_{\mathrm{th},s}w_{\|,s}\left(\underbrace{\cancel{n_{s}\frac{\partial u_{s}}{\partial z}}}_{B}
+  + \underbrace{\cancel{u_{s}\frac{\partial n_{s}}{\partial z}}}_{C}\right)\right)\right. \\
+  &amp; \quad + \frac{u_{s}}{n_{s}v_{\mathrm{th},s}}\left(\pm R_{\mathrm{ion}}n_{i}n_{n} + \int dv_\parallel S_{s}
+  - \underbrace{\cancel{n_{s}\frac{\partial u_{s}}{\partial z}}}_{A}
+  + \underbrace{\cancel{v_{\mathrm{th},s}w_{\|,s}\frac{\partial n_{s}}{\partial z}}}_{C}\right) \\
+  &amp; \quad-\frac{w_{\|,s}}{2}\frac{1}{p_{\|,s}}\left(-\frac{\partial q_{\|,s}}{\partial z}
+  - \underbrace{\cancel{3p_{\|,s}\frac{\partial u_{s}}{\partial z}}}_{B}
+  - R_{ss&#39;}\left(n_{s&#39;}p_{\|,s} - n_{s}p_{\|,s&#39;}
+  - m_{s}n_{s}n_{s&#39;}\left(u_{s} - u_{s&#39;}\right)^{2}\right)
+  \pm R_{\mathrm{ion}}n_{i}\left(p_{\|,n} + m_{s}n_{n}\left(u_{n}
+  - u_{s}\right)^{2}\right) + \int dv_\parallel v_\parallel^2 S_{s} + u_{s}^2 \int dv_\parallel S_{s}
+  + v_{\mathrm{th},s}w_{\|,s}\frac{\partial p_{\|,s}}{\partial z}\right) \\
+  &amp; \quad\left. + \frac{w_{\|,s}}{2}\frac{1}{n_{s}}\left(\pm R_{\mathrm{ion}}n_{i}n_{n} + \int dv_\parallel S_{s}
+  - \underbrace{\cancel{n_{s}\frac{\partial u_{s}}{\partial z}}}_{B}
+  + v_{\mathrm{th},s}w_{\|,s}\frac{\partial n_{s}}{\partial z}\right)\right]\frac{\partial g_{s}}{\partial w_{\|,s}} \\
+  &amp; = -R_{ss&#39;}n_{s&#39;}\left(g_{s} - \frac{v_{\mathrm{th},s}}{v_{\mathrm{th},s&#39;}}g_{s&#39;}\right)
+      \pm R_{\mathrm{ion}}\frac{v_{\mathrm{th},s}}{n_{s}}n_{i}\frac{n_{n}}{v_{\mathrm{th},n}}g_{n}
+      + \frac{v_{\mathrm{th},s}}{n_{s}} S_{s} \\
+
+  \Rightarrow &amp; \frac{\partial g_{s}}{\partial t}
+  + \frac{v_{\mathrm{th},s}}{n_{s}}\left(v_{\mathrm{th},s}w_{\|,s}
+  + u_{s}\right)\frac{\partial f_{s}}{\partial z}
+  + \frac{3g_{s}}{2n_{s}}\left(\pm R_{\mathrm{ion}}n_{i}n_{n} + \int dv_\parallel S_{s}
+  - u_{s}\frac{\partial n_{s}}{\partial z} - n_{s}\frac{\partial u_{s}}{\partial z}\right) \\
+  &amp; -\frac{g_{s}}{2p_{\|,s}}\left(-u_{s}\frac{\partial p_{\|,s}}{\partial z}
+  - \frac{\partial q_{\|,s}}{\partial z} - 3p_{\|,s}\frac{\partial u_{s}}{\partial z}
+  - R_{ss&#39;}\left(n_{s&#39;}p_{\|,s} - n_{s}p_{\|,s&#39;}
+  - m_{s}n_{s}n_{s&#39;}\left(u_{s} - u_{s&#39;}\right)^{2}\right)
+  \pm R_{\mathrm{ion}}n_{i}\left(p_{\|,n} + m_{s}n_{n}\left(u_{n} - u_{s}\right)^{2}\right)
+  + \int dv_\parallel v_\parallel^2 S_{s} + u_{s}^2 \int dv_\parallel S_{s}\right) \\
+  &amp; + \left[-\frac{1}{n_{s}v_{\mathrm{th},s}}\left(-\frac{\partial p_{\|,s}}{\partial z}
+  + R_{ss&#39;}n_{s}n_{s&#39;}\left(u_{s&#39;} - u_{s}\right)\pm R_{\mathrm{ion}}n_{i}n_{n}u_{n}\right)\right. \\
+  &amp; \quad + \frac{u_{s}}{n_{s}v_{\mathrm{th},s}}\left(\pm R_{\mathrm{ion}}n_{i}n_{n} + \int dv_\parallel S_{s}\right) \\
+  &amp; \quad-\frac{w_{\|,s}}{2}\frac{1}{p_{\|,s}}\left(-\frac{\partial q_{\|,s}}{\partial z}
+  - R_{ss&#39;}\left(n_{s&#39;}p_{\|,s} - n_{s}p_{\|,s&#39;}
+  - m_{s}n_{s}n_{s&#39;}\left(u_{s} - u_{s&#39;}\right)^{2}\right)
+  \pm R_{\mathrm{ion}}n_{i}\left(p_{\|,n} + m_{s}n_{n}\left(u_{n}
+  - u_{s}\right)^{2}\right) + \int dv_\parallel v_\parallel^2 S_{s} + u_{s}^2 \int dv_\parallel S_{s}
+  + v_{\mathrm{th},s}w_{\|,s}\frac{\partial p_{\|,s}}{\partial z}\right) \\
+  &amp; \quad\left. + \frac{w_{\|,s}}{2}\frac{1}{n_{s}}\left(\pm R_{\mathrm{ion}}n_{i}n_{n} + \int dv_\parallel S_{s}
+  + v_{\mathrm{th},s}w_{\|,s}\frac{\partial n_{s}}{\partial z}\right)\right]\frac{\partial g_{s}}{\partial w_{\|,s}} \\
+  &amp; = -R_{ss&#39;}n_{s&#39;}\left(g_{s} - \frac{v_{\mathrm{th},s}}{v_{\mathrm{th},s&#39;}}g_{s&#39;}\right)
+      \pm R_{\mathrm{ion}}\frac{v_{\mathrm{th},s}}{n_{s}}n_{i}\frac{n_{n}}{v_{\mathrm{th},n}}g_{n}
+      + \frac{v_{\mathrm{th},s}}{n_{s}} S_{s}\\
+
+  \Rightarrow &amp; \frac{\partial g_{s}}{\partial t}
+  + \frac{v_{\mathrm{th},s}}{n_{s}}\left(v_{\mathrm{th},s}w_{\|,s}
+  + u_{s}\right)\frac{\partial f_{s}}{\partial z}
+  + g_{s}\left(\pm\frac{3}{2}R_{\mathrm{ion}}n_{i}\frac{n_{n}}{n_{s}}
+  + \frac{3}{2n_{s}}\int dv_\parallel S_{s}
+  - \frac{3u_{s}}{2n_{s}}\frac{\partial n_{s}}{\partial z}\right) \\
+  &amp; + g_{s}\left(\frac{u_{s}}{2p_{\|,s}}\frac{\partial p_{\|,s}}{\partial z}
+  + \frac{1}{2p_{\|,s}}\frac{\partial q_{\|,s}}{\partial z}
+  + \frac{1}{2p_{\|,s}}R_{ss&#39;}\left(n_{s&#39;}p_{\|,s} - n_{s}p_{\|,s&#39;}
+  - n_{s}n_{s&#39;}\left(u_{s} - u_{s&#39;}\right)^{2}\right)
+  \mp\frac{1}{2}R_{\mathrm{ion}}\frac{n_{i}}{p_{\|,s}}\left(p_{\|,n}
+  + n_{n}\left(u_{n} - u_{s}\right)^{2}\right)
+  - \frac{1}{2p_{\parallel,s}}\int dv_\parallel v_\parallel^2 S_{s} - \frac{u_{s}^2}{2p_{\parallel,s}}\int dv_\parallel S_{s}\right) \\
+  &amp; + \left[-\frac{1}{n_{s}v_{\mathrm{th},s}}\left(-\frac{\partial p_{\|,s}}{\partial z}
+  + R_{ss&#39;}n_{s}n_{s&#39;}\left(u_{s&#39;} - u_{s}\right)
+  \pm R_{\mathrm{ion}}n_{i}n_{n}\left(u_{n} - u_{s}\right) - u_{s}\int dv_\parallel S_{s}\right)\right. \\
+  &amp; \quad-\frac{w_{\|,s}}{2}\frac{1}{p_{\|,s}}\left(-\frac{\partial q_{\|,s}}{\partial z}
+  - R_{ss&#39;}\left(n_{s&#39;}p_{\|,s} - n_{s}p_{\|,s&#39;}
+  - n_{s}n_{s&#39;}\left(u_{s} - u_{s&#39;}\right)^{2}\right)
+  + \int dv_\parallel v_\parallel^2 S_{s} + u_{s}^2 \int dv_\parallel S_{s}
+  + v_{\mathrm{th},s}w_{\|,s}\frac{\partial p_{\|,s}}{\partial z}\right) \\
+  &amp; \quad\mp\frac{w_{\|,s}}{2}R_{\mathrm{ion}}n_{i}\left(\frac{p_{\|,n}}{p_{\|,s}}
+  - \frac{n_{n}}{n_{s}} + \frac{n_{n}}{p_{\|,s}}\left(u_{n} - u_{s}\right)^{2}\right) \\
+  &amp; \quad\left. + \frac{w_{\|,s}}{2}\frac{1}{n_{s}}\left(\int dv_\parallel S_{s} + v_{\mathrm{th},s}w_{\|,s}\frac{\partial n_{s}}{\partial z}\right)\right]\frac{\partial g_{s}}{\partial w_{\|,s}} \\
+  &amp; = -R_{ss&#39;}n_{s&#39;}\left(g_{s} - \frac{v_{\mathrm{th},s}}{v_{\mathrm{th},s&#39;}}g_{s&#39;}\right)
+      \pm R_{\mathrm{ion}}\frac{v_{\mathrm{th},s}}{n_{s}}n_{i}\frac{n_{n}}{v_{\mathrm{th},n}}g_{n} + \frac{v_{\mathrm{th},s}}{n_{s}} S_{s}
+\end{align*}\]</p><p>and finally using</p><p class="math-container">\[\begin{align*}
+  \frac{u_{s}}{v_{\mathrm{th},s}}\frac{\partial v_{\mathrm{th},s}}{\partial z}
+  &amp; =u_{s}\sqrt{\frac{n_{s}}{p_{\|,s}}}\frac{\partial}{\partial z}\sqrt{\frac{p_{\|,s}}{n_{s}}} \\
+  &amp; = \frac{u_{s}}{2}\left(\frac{1}{p_{\|,s}}\frac{\partial p_{\|,s}}{\partial z}
+      - \frac{1}{n_{s}}\frac{\partial n_{s}}{\partial z}\right)
+\end{align*}\]</p><p>gives</p></details><p class="math-container">\[\begin{align}
+  \Rightarrow &amp; \frac{\partial g_{s}}{\partial t}
+  + \frac{v_{\mathrm{th},s}}{n_{s}}\left(v_{\mathrm{th},s}w_{\|,s}
+  + u_{s}\right)\frac{\partial f_{s}}{\partial z}
+  + \left(\pm\frac{3}{2}R_{\mathrm{ion}}n_{i}\frac{n_{n}}{n_{s}}
+  + \frac{3}{2n_{s}} \int dv_\parallel S_{s}
+  - \frac{u_{s}}{n_{s}}\frac{\partial n_{s}}{\partial z}\right)g_{s} \\
+  &amp; + \left(\frac{u_{s}}{v_{\mathrm{th},s}}\frac{\partial v_{\mathrm{th},s}}{\partial z}
+  + \frac{1}{2p_{\|,s}}\frac{\partial q_{\|,s}}{\partial z}\right. \\
+  &amp; \qquad + \frac{1}{2p_{\|,s}}R_{ss&#39;}\left(n_{s&#39;}p_{\|,s} - n_{s}p_{\|,s&#39;}
+  - n_{s}n_{s&#39;}\left(u_{s} - u_{s&#39;}\right)^{2}\right) \\
+  &amp; \qquad \left.\mp\frac{1}{2}R_{\mathrm{ion}}\frac{n_{i}}{p_{\|,s}}\left(p_{\|,n}
+  + n_{n}\left(u_{n} - u_{s}\right)^{2}\right)
+  - \frac{1}{2p_{\parallel,s}}\int dv_\parallel v_\parallel^2 S_{s} - \frac{u_{s}^2}{2p_{\parallel,s}}\int dv_\parallel S_{s}\right)g_{s} \\
+  &amp; + \left[-\frac{1}{n_{s}v_{\mathrm{th},s}}\left(-\frac{\partial p_{\|,s}}{\partial z}
+  + R_{ss&#39;}n_{s}n_{s&#39;}\left(u_{s&#39;} - u_{s}\right)
+  \pm R_{\mathrm{ion}}n_{i}n_{n}\left(u_{n} - u_{s}\right) - u_{s}\int dv_\parallel S_{s}\right)\right. \\
+  &amp; \qquad-\frac{w_{\|,s}}{2}\frac{1}{p_{\|,s}}\left(-\frac{\partial q_{\|,s}}{\partial z}
+  - R_{ss&#39;}\left(n_{s&#39;}p_{\|,s} - n_{s}p_{\|,s&#39;}
+  - n_{s}n_{s&#39;}\left(u_{s} - u_{s&#39;}\right)^{2}\right)
+  + \int dv_\parallel v_\parallel^2 S_{s} + u_{s}^2 \int dv_\parallel S_{s}
+  + v_{\mathrm{th},s}w_{\|,s}\frac{\partial p_{\|,s}}{\partial z}\right) \\
+  &amp; \qquad\mp\frac{w_{\|,s}}{2}R_{\mathrm{ion}}n_{i}\left(\frac{p_{\|,n}}{p_{\|,s}}
+  - \frac{n_{n}}{n_{s}} + \frac{n_{n}}{p_{\|,s}}\left(u_{n} - u_{s}\right)^{2}\right) \\
+  &amp; \qquad\left. + \frac{w_{\parallel,s}}{2}\frac{1}{n_{s}}\int dv_\parallel S_{s}
+  + \frac{w_{\|,s}^{2}}{2}\frac{v_{\mathrm{th},s}}{n_{s}}\frac{\partial n_{s}}{\partial z}\right]\frac{\partial g_{s}}{\partial w_{\|,s}} \\
+  &amp; = -R_{ss&#39;}n_{s&#39;}\left(g_{s} - \frac{v_{\mathrm{th},s}}{v_{\mathrm{th},s&#39;}}g_{s&#39;}\right)
+      \pm R_{\mathrm{ion}}\frac{v_{\mathrm{th},s}}{n_{s}}n_{i}\frac{n_{n}}{v_{\mathrm{th},n}}g_{n} + \frac{v_{\mathrm{th},s}}{n_{s}} S_{s}
+\end{align}\]</p><p>Writing out the final result fully for ions</p><p class="math-container">\[\begin{align}
+  &amp; \frac{\partial g_{i}}{\partial t}
+  + \frac{v_{\mathrm{th},i}}{n_{i}}\left(v_{\mathrm{th},i}w_{\|,i}
+  + u_{i}\right)\frac{\partial f_{i}}{\partial z}
+  + \left(\frac{3}{2}R_{\mathrm{ion}}n_{n} + \frac{3}{2n_{i}}\int dv_\parallel S_{i}
+  - \frac{u_{i}}{n_{i}}\frac{\partial n_{i}}{\partial z}\right)g_{i} \\
+  &amp; + \left(\frac{u_{i}}{v_{\mathrm{th},i}}\frac{\partial v_{\mathrm{th},i}}{\partial z}
+  + \frac{1}{2p_{\|,i}}\frac{\partial q_{\|,i}}{\partial z}\right. \\
+  &amp; \qquad + \frac{1}{2p_{\|,i}}R_{in}\left(n_{n}p_{\|,i} - n_{i}p_{\|,n}
+  - n_{i}n_{n}\left(u_{i} - u_{n}\right)^{2}\right) \\
+  &amp; \qquad \left. - \frac{1}{2}R_{\mathrm{ion}}\frac{n_{i}}{p_{\|,i}}\left(p_{\|,n}
+  + n_{n}\left(u_{n} - u_{i}\right)^{2}\right)
+  - \frac{1}{2p_{\parallel,i}}\int dv_\parallel v_\parallel^2 S_{i} - \frac{u_{i}^2}{2p_{\parallel,i}}\int dv_\parallel S_{i}\right)g_{i} \\
+  &amp; + \left[-\frac{1}{n_{i}v_{\mathrm{th},i}}\left(-\frac{\partial p_{\|,i}}{\partial z}
+  + R_{in}n_{i}n_{n}\left(u_{n} - u_{i}\right)
+  + R_{\mathrm{ion}}n_{i}n_{n}\left(u_{n} - u_{i}\right) - u_{i}\int dv_\parallel S_{i}\right)\right. \\
+  &amp; \qquad-\frac{w_{\|,i}}{2}\frac{1}{p_{\|,i}}\left(-\frac{\partial q_{\|,i}}{\partial z}
+  - R_{in}\left(n_{n}p_{\|,i} - n_{i}p_{\|,n}
+  - n_{i}n_{n}\left(u_{i} - u_{n}\right)^{2}\right)
+  + \int dv_\parallel v_\parallel^2 S_{i} + u_{i}^2 \int dv_\parallel S_{i}
+  + v_{\mathrm{th},i}w_{\|,i}\frac{\partial p_{\|,i}}{\partial z}\right) \\
+  &amp; \qquad - \frac{w_{\|,i}}{2}R_{\mathrm{ion}}n_{i}\left(\frac{p_{\|,n}}{p_{\|,i}}
+  - \frac{n_{n}}{n_{i}} + \frac{n_{n}}{p_{\|,i}}\left(u_{n} - u_{i}\right)^{2}\right) \\
+  &amp; \qquad\left. + \frac{w_{\parallel,i}}{2} \frac{1}{n_{i}}\int dv_\parallel S_{i}
+  + \frac{w_{\|,i}^{2}}{2}\frac{v_{\mathrm{th},i}}{n_{i}}\frac{\partial n_{i}}{\partial z}\right]\frac{\partial g_{i}}{\partial w_{\|,i}} \\
+  &amp; = -R_{in}n_{n}\left(g_{i} - \frac{v_{\mathrm{th},i}}{v_{\mathrm{th},n}}g_{n}\right)
+      + R_{\mathrm{ion}}v_{\mathrm{th},i}\frac{n_{n}}{v_{\mathrm{th},n}}g_{n} + \frac{v_{\mathrm{th},i}}{n_{i}} S_{i}
+\end{align}\]</p><p>and for neutrals where several of the ionization terms cancel</p><p class="math-container">\[\begin{align}
+  \Rightarrow &amp; \frac{\partial g_{n}}{\partial t}
+  + \frac{v_{\mathrm{th},n}}{n_{n}}\left(v_{\mathrm{th},n}w_{\|,n}
+  + u_{n}\right)\frac{\partial f_{n}}{\partial z}
+  + \left(-\frac{3}{2}R_{\mathrm{ion}}n_{i} + \frac{3}{2n_{n}}\int dv_\parallel S_{n}
+  - \frac{u_{n}}{n_{n}}\frac{\partial n_{n}}{\partial z}\right)g_{n} \\
+  &amp; + \left(\frac{u_{n}}{v_{\mathrm{th},n}}\frac{\partial v_{\mathrm{th},n}}{\partial z}
+  + \frac{1}{2p_{\|,n}}\frac{\partial q_{\|,n}}{\partial z}\right. \\
+  &amp; \qquad \left. + \frac{1}{2p_{\|,n}}R_{in}\left(n_{i}p_{\|,n} - n_{n}p_{\|,i}
+  - n_{n}n_{i}\left(u_{n} - u_{i}\right)^{2}\right)
+  + \frac{1}{2}R_{\mathrm{ion}}n_{i}
+  - \frac{1}{2p_{\parallel,n}}\int dv_\parallel v_\parallel^2 S_{n} - \frac{u_{n}^2}{2p_{\parallel,n}}\int dv_\parallel S_{n}\right)g_{n} \\
+  &amp; + \left[-\frac{1}{n_{n}v_{\mathrm{th},n}}\left(-\frac{\partial p_{\|,n}}{\partial z}
+  + R_{in}n_{n}n_{i}\left(u_{i} - u_{n}\right) - u_{n}\int dv_\parallel S_{n}\right)\right. \\
+  &amp; \qquad-\frac{w_{\|,n}}{2}\frac{1}{p_{\|,n}}\left(-\frac{\partial q_{\|,n}}{\partial z}
+  - R_{in}\left(n_{i}p_{\|,n} - n_{n}p_{\|,i}
+  - n_{n}n_{i}\left(u_{n} - u_{i}\right)^{2}\right)
+  + \int dv_\parallel S_{n} + u_{n}^2\int dv_\parallel v_\parallel^2 S_{n}
+  + v_{\mathrm{th},n}w_{\|,n}\frac{\partial p_{\|,n}}{\partial z}\right) \\
+  &amp; \qquad\left. + \frac{w_{\parallel,n}}{2}\frac{1}{n_{n}}\int dv_\parallel S_{n}
+  + \frac{w_{\|,n}^{2}}{2}\frac{v_{\mathrm{th},n}}{n_{n}}\frac{\partial n_{n}}{\partial z}\right]\frac{\partial g_{n}}{\partial w_{\|,n}} \\
+  &amp; = -R_{in}n_{i}\left(g_{n} - \frac{v_{\mathrm{th},n}}{v_{\mathrm{th},i}}g_{i}\right)
+      - R_{\mathrm{ion}}n_{i}g_{n} + \frac{v_{\mathrm{th},n}}{n_{n}} S_{n}
+\end{align}\]</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../input_options/">« Input Options</a><a class="docs-footer-nextpage" href="../post_processing_notes/">Post processing »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Wednesday 15 November 2023 14:05">Wednesday 15 November 2023</span>. Using Julia version 1.8.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
