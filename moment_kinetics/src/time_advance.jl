@@ -2948,6 +2948,7 @@ moments and moment derivatives
 
     if composition.n_neutral_species > 0
         if pdf_bc_constraints
+            @begin_sn_r_z_region()
             # Ensure there are no negative values in the pdf before applying boundary
             # conditions, so that negative deviations do not mess up the integral-constraint
             # corrections in the sheath boundary conditions.
