@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Moment kinetic equations for electrons · moment_kinetics</title><meta name="title" content="Moment kinetic equations for electrons · moment_kinetics"/><meta property="og:title" content="Moment kinetic equations for electrons · moment_kinetics"/><meta property="twitter:title" content="Moment kinetic equations for electrons · moment_kinetics"/><meta name="description" content="Documentation for moment_kinetics."/><meta property="og:description" content="Documentation for moment_kinetics."/><meta property="twitter:description" content="Documentation for moment_kinetics."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">moment_kinetics</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../chebyshev/">Chebyshev tranform via Fourier transform</a></li><li><a class="tocitem" href="../constraints_on_normalized_distribution_function/">Constraints on normalized distribution function</a></li><li><a class="tocitem" href="../debugging-hints/">Debugging</a></li><li><a class="tocitem" href="../developing/">Developing</a></li><li><a class="tocitem" href="../external_sources_notes/">External sources</a></li><li><a class="tocitem" href="../fokker_planck_notes/">Fokker Planck collision operator</a></li><li><a class="tocitem" href="../geometry/">Magnetic Geometry</a></li><li><a class="tocitem" href="../getting_started/">Getting started</a></li><li><a class="tocitem" href="../input_options/">Input Options</a></li><li><a class="tocitem" href="../jacobian_matrices/">Jacobian matrix calculations</a></li><li><a class="tocitem" href="../machine_setup_notes/"><code>machine_setup</code> notes</a></li><li><a class="tocitem" href="../manual_setup/">Manual setup</a></li><li><a class="tocitem" href="../manufactured_solution_test_examples/">List of Manufactured Solutions Test TOML inputs</a></li><li><a class="tocitem" href="../moment_kinetic_equations/">Moment kinetic equations</a></li><li class="is-active"><a class="tocitem" href>Moment kinetic equations for electrons</a><ul class="internal"><li><a class="tocitem" href="#Moment-equations"><span>Moment equations</span></a></li><li><a class="tocitem" href="#Electron-collisions"><span>Electron collisions</span></a></li><li><a class="tocitem" href="#1D2V-kinetic-equation"><span>1D2V kinetic equation</span></a></li><li><a class="tocitem" href="#Reduction-to-1D1V"><span>Reduction to 1D1V</span></a></li><li><a class="tocitem" href="#Dimensionless-equations"><span>Dimensionless equations</span></a></li><li><a class="tocitem" href="#Old-1D1V-kinetic-electron-equations"><span>Old 1D1V kinetic electron equations</span></a></li></ul></li><li><a class="tocitem" href="../parameter_scans/">Parameter scans</a></li><li><a class="tocitem" href="../post_processing_notes/">Post processing</a></li><li><a class="tocitem" href="../shared_memory_debugging/">Shared memory debugging</a></li><li><a class="tocitem" href="../timestepping/">Timestepping</a></li><li><a class="tocitem" href="../wall_boundary_conditions/">Wall boundary conditions with moment constraints</a></li><li><a class="tocitem" href="../zz_MKJacobianUtils/"><code>MKJacobianUtils</code></a></li><li><a class="tocitem" href="../zz_advection/"><code>advection</code></a></li><li><a class="tocitem" href="../zz_analysis/"><code>analysis</code></a></li><li><a class="tocitem" href="../zz_array_allocation/"><code>array_allocation</code></a></li><li><a class="tocitem" href="../zz_bgk/"><code>bgk</code></a></li><li><a class="tocitem" href="../zz_boundary_conditions/"><code>boundary_conditions</code></a></li><li><a class="tocitem" href="../zz_calculus/"><code>calculus</code></a></li><li><a class="tocitem" href="../zz_charge_exchange/"><code>charge_exchange</code></a></li><li><a class="tocitem" href="../zz_chebyshev/"><code>chebyshev</code></a></li><li><a class="tocitem" href="../zz_clenshaw_curtis/"><code>clenshaw_curtis</code></a></li><li><a class="tocitem" href="../zz_collision_frequencies/"><code>collision_frequencies</code></a></li><li><a class="tocitem" href="../zz_command_line_options/"><code>command_line_options</code></a></li><li><a class="tocitem" href="../zz_communication/"><code>communication</code></a></li><li><a class="tocitem" href="../zz_constants/"><code>constants</code></a></li><li><a class="tocitem" href="../zz_continuity/"><code>continuity</code></a></li><li><a class="tocitem" href="../zz_coordinates/"><code>coordinates</code></a></li><li><a class="tocitem" href="../zz_debugging/"><code>debugging</code></a></li><li><a class="tocitem" href="../zz_derivatives/"><code>derivatives</code></a></li><li><a class="tocitem" href="../zz_electron_fluid_equations/"><code>electron_fluid_equations</code></a></li><li><a class="tocitem" href="../zz_electron_kinetic_equation/"><code>electron_kinetic_equation</code></a></li><li><a class="tocitem" href="../zz_electron_vpa_advection/"><code>electron_vpa_advection</code></a></li><li><a class="tocitem" href="../zz_electron_z_advection/"><code>electron_z_advection</code></a></li><li><a class="tocitem" href="../zz_em_fields/"><code>em_fields</code></a></li><li><a class="tocitem" href="../zz_energy_equation/"><code>energy_equation</code></a></li><li><a class="tocitem" href="../zz_external_sources/"><code>external_sources</code></a></li><li><a class="tocitem" href="../zz_file_io/"><code>file_io</code></a></li><li><a class="tocitem" href="../zz_finite_differences/"><code>finite_differences</code></a></li><li><a class="tocitem" href="../zz_fokker_planck/"><code>fokker_planck</code></a></li><li><a class="tocitem" href="../zz_fokker_planck_calculus/"><code>fokker_planck_calculus</code></a></li><li><a class="tocitem" href="../zz_fokker_planck_test/"><code>fokker_planck_test</code></a></li><li><a class="tocitem" href="../zz_force_balance/"><code>force_balance</code></a></li><li><a class="tocitem" href="../zz_fourier/"><code>fourier</code></a></li><li><a class="tocitem" href="../zz_gauss_legendre/"><code>gauss_legendre</code></a></li><li><a class="tocitem" href="../zz_geo/"><code>geo</code></a></li><li><a class="tocitem" href="../zz_gyroaverages/"><code>gyroaverages</code></a></li><li><a class="tocitem" href="../zz_initial_conditions/"><code>initial_conditions</code></a></li><li><a class="tocitem" href="../zz_input_structs/"><code>input_structs</code></a></li><li><a class="tocitem" href="../zz_interpolation/"><code>interpolation</code></a></li><li><a class="tocitem" href="../zz_ionization/"><code>ionization</code></a></li><li><a class="tocitem" href="../zz_jacobian_matrices/"><code>jacobian_matrices</code></a></li><li><a class="tocitem" href="../zz_krook_collisions/"><code>krook_collisions</code></a></li><li><a class="tocitem" href="../zz_lagrange_polynomials/"><code>lagrange_polynomials</code></a></li><li><a class="tocitem" href="../zz_load_data/"><code>load_data</code></a></li><li><a class="tocitem" href="../zz_loop_ranges_struct/"><code>loop_ranges_struct</code></a></li><li><a class="tocitem" href="../zz_looping/"><code>looping</code></a></li><li><a class="tocitem" href="../zz_makie_post_processing/"><code>makie_post_processing</code></a></li><li><a class="tocitem" href="../zz_manufactured_solns/"><code>manufactured_solns</code></a></li><li><a class="tocitem" href="../zz_maxwell_diffusion/"><code>maxwell_diffusion</code></a></li><li><a class="tocitem" href="../zz_moment_constraints/"><code>moment_constraints</code></a></li><li><a class="tocitem" href="../zz_moment_kinetics/"><code>moment_kinetics</code></a></li><li><a class="tocitem" href="../zz_moment_kinetics_input/"><code>moment_kinetics_input</code></a></li><li><a class="tocitem" href="../zz_moment_kinetics_structs/"><code>moment_kinetics_structs</code></a></li><li><a class="tocitem" href="../zz_neutral_r_advection/"><code>neutral_r_advection</code></a></li><li><a class="tocitem" href="../zz_neutral_vz_advection/"><code>neutral_vz_advection</code></a></li><li><a class="tocitem" href="../zz_neutral_z_advection/"><code>neutral_z_advection</code></a></li><li><a class="tocitem" href="../zz_nonlinear_solvers/"><code>nonlinear_solvers</code></a></li><li><a class="tocitem" href="../zz_numerical_dissipation/"><code>numerical_dissipation</code></a></li><li><a class="tocitem" href="../zz_plot_MMS_sequence/"><code>plot_MMS_sequence</code></a></li><li><a class="tocitem" href="../zz_plot_sequence/"><code>plot_sequence</code></a></li><li><a class="tocitem" href="../zz_plots_post_processing/"><code>plots_post_processing</code></a></li><li><a class="tocitem" href="../zz_quadrature/"><code>quadrature</code></a></li><li><a class="tocitem" href="../zz_r_advection/"><code>r_advection</code></a></li><li><a class="tocitem" href="../zz_reference_parameters/"><code>reference_parameters</code></a></li><li><a class="tocitem" href="../zz_runge_kutta/"><code>runge_kutta</code></a></li><li><a class="tocitem" href="../zz_source_terms/"><code>source_terms</code></a></li><li><a class="tocitem" href="../zz_species_input/"><code>species_input</code></a></li><li><a class="tocitem" href="../zz_time_advance/"><code>time_advance</code></a></li><li><a class="tocitem" href="../zz_timer_utils/"><code>timer_utils</code></a></li><li><a class="tocitem" href="../zz_type_definitions/"><code>type_definitions</code></a></li><li><a class="tocitem" href="../zz_utils/"><code>utils</code></a></li><li><a class="tocitem" href="../zz_velocity_grid_transforms/"><code>velocity_grid_transforms</code></a></li><li><a class="tocitem" href="../zz_velocity_moments/"><code>velocity_moments</code></a></li><li><a class="tocitem" href="../zz_vpa_advection/"><code>vpa_advection</code></a></li><li><a class="tocitem" href="../zz_vperp_advection/"><code>vperp_advection</code></a></li><li><a class="tocitem" href="../zz_z_advection/"><code>z_advection</code></a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Moment kinetic equations for electrons</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Moment kinetic equations for electrons</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/mabarnes/moment_kinetics" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/mabarnes/moment_kinetics/blob/master/docs/src/moment_kinetic_equations_electrons.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Moment-kinetic-equations-for-electrons"><a class="docs-heading-anchor" href="#Moment-kinetic-equations-for-electrons">Moment kinetic equations for electrons</a><a id="Moment-kinetic-equations-for-electrons-1"></a><a class="docs-heading-anchor-permalink" href="#Moment-kinetic-equations-for-electrons" title="Permalink"></a></h1><h2 id="Moment-equations"><a class="docs-heading-anchor" href="#Moment-equations">Moment equations</a><a id="Moment-equations-1"></a><a class="docs-heading-anchor-permalink" href="#Moment-equations" title="Permalink"></a></h2><p>Quasineutrality gives</p><p class="math-container">\[\begin{align}
+n_e &amp;= n_i
+\end{align}\]</p><p>while the continuity equation is</p><p class="math-container">\[\begin{align}
+\frac{\partial n_e}{\partial t}
++ \frac{\partial}{\partial z}\left( n_e u_{e\parallel} \right)
+&amp;= n_e n_n R_\mathrm{ioniz} + S_{e,n}
+\end{align}\]</p><p>Subtracting from ion continuity and using quasineutrality</p><p class="math-container">\[\begin{align}
+\frac{\partial}{\partial z}\left(n_e (u_{i\parallel} - u_{e\parallel}) \right)
+&amp;= S_{i,n} - S_{e,n}
+\end{align}\]</p><p>giving an equation for <span>$u_{e\parallel}$</span>. Assuming that the sources do not add any charge <span>$S_{i,n} = S_{e,n}$</span> then implies that <span>$u_{e\parallel} = u_{i\parallel} + u_0$</span> assuming in addition (at least for the moment) that there is no current through the sheath sets <span>$u_0 = 0$</span> so that</p><p class="math-container">\[\begin{align}
+u_{e\parallel} &amp;= u_{i\parallel}
+\end{align}\]</p><p>In the parallel momentum equation, the inertial terms can be neglected as they are <span>$O(m_e/m_i)$</span>, leaving</p><p class="math-container">\[\begin{align}
+0 &amp;= -\frac{\partial p_{e\parallel}}{\partial z}
+     + e n_e \frac{\partial \phi}{\partial z}
+     + F_{ei\parallel}
+     + m_e \int v_\parallel C_{en} d^3 v
+     + S_{e,\mathrm{mom}}
+\end{align}\]</p><p>where <span>$C_{en}$</span> represents elastic electron-neutral collisions (for collisions see <a href="#Electron-collisions">Electron collisions</a>), which gives an equation for <span>$E_\parallel = -\partial \phi/\partial z$</span></p><p class="math-container">\[\begin{align}
+e E_\parallel &amp;= -\frac{1}{n_e} \frac{\partial p_{e\parallel}}{\partial z}
+                 + \frac{F_{ei\parallel}}{n_e}
+                 + \frac{m_e}{n_e} \int v_\parallel C_{en} d^3 v
+                 + \frac{1}{n_e} S_{e,\mathrm{mom}} \\
+e E_\parallel &amp;= -\frac{1}{n_e} \frac{\partial p_{e\parallel}}{\partial z}
+                 + m_e \nu_{ei} \left( u_{i\parallel} - u_{e\parallel} \right)
+                 + \frac{1}{n_e} S_{e,\mathrm{mom}} \\
+\end{align}\]</p><p>where the second line assumes the current Krook collision operator and neglects electron-neutral elastic collisions.</p><p>The energy equation is similar to <a href="../moment_kinetic_equations/#Ion-moment-equations">the ion one</a></p><p class="math-container">\[\begin{align}
+&amp;\frac{3}{2} \frac{\partial p_e}{\partial t}
++ \frac{\partial q_{e\parallel}}{\partial z}
++ p_{e\parallel} \frac{\partial u_{e\parallel}}{\partial z}
++ \frac{3}{2} u_{e\parallel} \frac{\partial p_e}{\partial z}
++ \frac{3}{2} p_e \frac{\partial u_{e\parallel}}{\partial z} \nonumber \\
+&amp;\quad= -E_\mathrm{ioniz} n_e n_n R_\mathrm{ioniz}
+        + \int \frac{1}{2} m_e |\boldsymbol{v} - u_{e\parallel} \hat{\boldsymbol{z}}|^2 C_{ei} d^3 v
+        + \int \frac{1}{2} m_e |\boldsymbol{v} - u_{e\parallel} \hat{\boldsymbol{z}}|^2 C_{en} d^3 v \nonumber \\
+&amp;\qquad + \frac{3}{2} S_{e,p} \\
+
+&amp;\frac{3}{2} \frac{\partial p_e}{\partial t}
++ \frac{\partial q_{e\parallel}}{\partial z}
++ p_{e\parallel} \frac{\partial u_{e\parallel}}{\partial z}
++ \frac{3}{2} u_{e\parallel} \frac{\partial p_e}{\partial z}
++ \frac{3}{2} p_e \frac{\partial u_{e\parallel}}{\partial z} \nonumber \\
+&amp;\quad= -E_\mathrm{ioniz} n_e n_n R_\mathrm{ioniz}
+        + 3 n_e \frac{m_e}{m_i} \nu_{ei} \left( T_i - T_e \right)
+        + m_e n_e \nu_{ei} \left( u_{i\parallel} - u_{e_\parallel} \right)^2 \nonumber \\
+&amp;\qquad + \frac{3}{2} S_{e,p} \\
+\end{align}\]</p><p>To get the second version we treat the collision operators as described in <a href="#Electron-collisions">Electron collisions</a>.</p><h2 id="Electron-collisions"><a class="docs-heading-anchor" href="#Electron-collisions">Electron collisions</a><a id="Electron-collisions-1"></a><a class="docs-heading-anchor-permalink" href="#Electron-collisions" title="Permalink"></a></h2><p>Currently electron-neutral elastic collisions <span>$C_{en}$</span> are not implemented.</p><p>Electron-electron collisions use a Krook operator</p><p class="math-container">\[\begin{align}
+C_{K,ee} &amp;= -\nu_{ee}(n_e,T_e) \left(f_e - \frac{n_e}{\pi^{3/2} v_{Te}^3} \exp\left(-\frac{|\boldsymbol{v} - u_{e\parallel}\hat{\boldsymbol{z}}|^2}{v_{Te}^2}\right) \right)
+\end{align}\]</p><p>with the electron-electron collision frequency</p><p class="math-container">\[\begin{align}
+\nu_{ee}(n_e,T_e) = \frac{n_e e^4 \log\Lambda_{ee}}{4 \pi \epsilon_0^2 m_e^2 v_{Te}^3}
+\end{align}\]</p><p>Electron-ion collisions also use a Krook operator</p><p class="math-container">\[\begin{align}
+C_{K,ei} &amp;= -\nu_{ei}(n_e,T_e) \left(f_e - \frac{n_e}{\pi^{3/2} v_{Te}^3} \exp\left(-\frac{|\boldsymbol{v} - u_{i\parallel}\hat{\boldsymbol{z}}|^2}{v_{Te}^2}\right) \right)
+\end{align}\]</p><p>with the electron-ion collision frequency</p><p class="math-container">\[\begin{align}
+\nu_{ei}(n_e,T_e) = \frac{n_e e^4 \log\Lambda_{ei}}{4 \pi \epsilon_0^2 m_e^2 v_{Te}^3}
+\end{align}\]</p><p>For the Krook operator, the friction is</p><p class="math-container">\[\begin{align}
+F_{ei\parallel} &amp;= -m_e \int v_\parallel C_{K,ei} d^3 v \nonumber \\
+                &amp;= m_e n_e \nu_{ei} \left( u_{i\parallel} - u_{e\parallel} \right)
+\end{align}\]</p><p>Energy exchange with ions is kept assuming the distributions are Maxwellian to allow different temperatures (this form comes from the Fokker-Planck collision operator assuming Maxwellian distributions)</p><p class="math-container">\[\begin{align}
+\int \frac{1}{2} m_i |\boldsymbol{v} - u_{i\parallel} \hat{\boldsymbol{z}}|^2 C_{ie}[f_i,f_e] d^3 v
+&amp;\approx 3 \frac{n_e m_e \nu_{ei}}{m_i} (T_e - T_i)
+\end{align}\]</p><p>in the ion energy equation. In the electron energy equation, need the conversion</p><p class="math-container">\[\begin{align}
+\int \frac{1}{2} m_e |\boldsymbol{v} - u_{e\parallel} \hat{\boldsymbol{z}}|^2 C_{ei}[f_e,f_i] d^3 v
+&amp;= \int \left(\frac{1}{2} m_e v^2 - m_e u_{e\parallel} v_\parallel + \underbrace{\frac{1}{2} m_e u_{e\parallel}^2}_{=0\text{ particle conservation}} \right) C_ei d^3 v \nonumber \\
+&amp;= -\int \frac{1}{2} m_i v^2 C_{ie}
+   - m_e u_{e\parallel} \underbrace{\int v_\parallel C_{ei} d^3 v}_{F_{ei\parallel}/m_e} \nonumber \\
+&amp;= -\int \frac{1}{2} m_i |\boldsymbol{v} - u_{i\parallel} \hat{\boldsymbol{z}}|^2 C_ie d^3 v
+   - \underbrace{\int m_i u_{i\parallel} v_\parallel C_{ie} d^3 v}_{\text{momentum conservation } = u_{i\parallel} (-F_{ie\parallel}) = u_{i\parallel} F_{ei\parallel}}
+   - F_{ei\parallel} u_{e\parallel} \nonumber \\
+&amp;= 3 n_e \frac{m_e}{m_i} \nu_{ei} \left(T_i - T_e \right) + F_{ei\parallel} \left(u_{i\parallel} - u_{e\parallel} \right) \\
+\end{align}\]</p><h2 id="1D2V-kinetic-equation"><a class="docs-heading-anchor" href="#1D2V-kinetic-equation">1D2V kinetic equation</a><a id="1D2V-kinetic-equation-1"></a><a class="docs-heading-anchor-permalink" href="#1D2V-kinetic-equation" title="Permalink"></a></h2><p>For the electrons <span>$u_{e\parallel} \sim u_{i\parallel}$</span> by quasineutrality so <span>$u_{e\parallel} \sim v_{Ti} \ll v_{Te}$</span>, which means we can neglect <span>$u_{e\parallel}$</span> in most of the terms for evolution of <span>$f_e$</span>.</p><p>Similar to the <a href="../moment_kinetic_equations/#ion_full_moment_kinetic_equation">ion shape function equation</a>, but <span>$\partial F_e/\partial t$</span> is negligible, i.e.  electrons move on timescales faster than the system evolution.</p><p class="math-container">\[\begin{align}
+\dot{z}_e \frac{\partial F_e}{\partial z}
++ \dot{w}_{\parallel,e} \frac{\partial F_e}{\partial w_\parallel}
++ \dot{w}_{\perp,e} \frac{\partial F_e}{\partial w_\perp}
+&amp;= \dot{F}_e + \mathcal{C}_{ee} + \mathcal{C}_{ei} + \mathcal{C}_{en} + \mathcal{S}_e
+\end{align}\]</p><p>where</p><p class="math-container">\[\begin{align}
+\dot{z}_e &amp;= v_{Te} w_\parallel \\
+
+\dot{w}_{\parallel,e} &amp;= \frac{1}{n_e m_e v_{Te}} \frac{\partial p_{e\parallel}}{\partial z}
+                         + \frac{w_\parallel}{3 p_e} \frac{\partial q_{e\parallel}}{\partial z}
+                         - w_\parallel^2 \frac{\partial v_{T_e}}{\partial z} \nonumber \\
+                  &amp;\quad - \frac{1}{m_e n_e v_{Te}} (S_{e,\mathrm{mom}} - m_e u_{e\parallel} S_{e,n})
+                         - \frac{w_\parallel}{2 p_e} (S_{e,p} - T_e S_{e,n}) \\
+
+\dot{w}_{\perp,e} &amp;= \frac{w_\perp}{3 p_e} \frac{\partial q_{e\parallel}}{\partial z}
+                     - w_\perp w_\parallel \frac{\partial v_{Te}}{\partial z} \nonumber \\
+              &amp;\quad - \frac{w_\perp}{2 p_e} (S_{e,p} - T_e S_{e,n}) \\
+
+\frac{\dot{F}_e}{F_e} &amp;= w_\parallel \left( 3 \frac{\partial v_{Te}}{\partial z} - \frac{v_{Te}}{n_e} \frac{\partial n_e}{\partial z} \right)
+                         - \frac{1}{p_e} \frac{\partial q_{e\parallel}}{\partial z} \nonumber \\
+                  &amp;\quad + \frac{3}{2 p_e} S_{e,p} - \frac{5}{2 n_e} S_{e,n} \\
+
+\mathcal{C}_{ee} &amp;= \frac{v_{Te}^3}{n_e} C_{K,ee} \\
+                 &amp;= -\frac{v_{Te}^3}{n_e} \nu_{ee} \left( f_e - \frac{n_e}{\pi^{3/2} v_{Te}^3} \exp\left( -\frac{|\boldsymbol{v} - u_{e\parallel}\hat{\boldsymbol{z}}|^2}{v_{Te}^2} \right) \right) \\
+                 &amp;= - \nu_{ee} \left( F_e - \frac{1}{\pi^{3/2}} \exp\left( -w^2 \right) \right) \\
+
+\mathcal{C}_{ei} &amp;= \frac{v_{Te}^3}{n_e} C_{K,ei} \\
+                 &amp;= -\frac{v_{Te}^3}{n_e} \nu_{ei} \left( f_e - \frac{n_e}{\pi^{3/2} v_{Te}^3} \exp\left( -\frac{|\boldsymbol{v} - u_{i\parallel}\hat{\boldsymbol{z}}|^2}{v_{Te}^2} \right) \right) \\
+                 &amp;= - \nu_{ei} \left( F_e - \frac{1}{\pi^{3/2}} \exp\left( -\left( w_\parallel - \frac{(u_{i\parallel} - u_{e\parallel})}{v_{Te}} \right)^2 - w_\perp^2 \right) \right) \\
+
+\mathcal{C}_{en} &amp;= \text{not implemented yet} \\
+
+\mathcal{S}_{e} &amp;= \frac{v_{Te}^3}{n_e} S_e \\
+\end{align}\]</p><p>Although <span>$S_e$</span> should mostly be small in <span>$\sqrt{m_e/m_i}$</span>, we keep it for the case when the source is a Maxwellian with a temperature significantly higher than the electron temperature because then the source can contribute significantly to the high energy tail of electrons. As we keep <span>$\mathcal S_e$</span>, to ensure that the first 3 moments of the shape function equation vanish, we must also keep the source contributions to <span>$\dot w_{\parallel,e}$</span>, <span>$\dot w_{\perp,e}$</span>, and <span>$\dot F_e/F_e$</span> in the same form as the ion equations.</p><h2 id="Reduction-to-1D1V"><a class="docs-heading-anchor" href="#Reduction-to-1D1V">Reduction to 1D1V</a><a id="Reduction-to-1D1V-1"></a><a class="docs-heading-anchor-permalink" href="#Reduction-to-1D1V" title="Permalink"></a></h2><p>We can take the <span>$T_{e\perp}=0$</span> limit of the equations and marginalise over <span>$v_\perp$</span>/<span>$w_\perp$</span> to reduce to 1D1V in a very similar way <a href="../moment_kinetic_equations/#ion_reduction_to_2d1v">as for the ions</a>.</p><p>Quasineutrality and force balance keep the same form, and the energy equation becomes</p><p class="math-container">\[\begin{align}
+&amp;\frac{3}{2} \frac{\partial p_e}{\partial t}
++ \frac{\partial q_{e\parallel}}{\partial z}
++ p_{e\parallel} \frac{\partial u_{e\parallel}}{\partial z}
++ \frac{3}{2} u_{e\parallel} \frac{\partial p_e}{\partial z}
++ \frac{3}{2} p_e \frac{\partial u_{e\parallel}}{\partial z} \nonumber \\
+&amp;\quad= -E_\mathrm{ioniz} n_e n_n R_\mathrm{ioniz}
+        + \int \frac{1}{2} m_e (v_\parallel - u_{e\parallel})^2 \bar{C}_{ei} dv_\parallel
+        + \int \frac{1}{2} m_e (v_\parallel - u_{e\parallel})^2 \bar{C}_{en} dv_\parallel \nonumber \\
+&amp;\qquad + \frac{3}{2} S_{e,p} \\
+
+&amp;\frac{3}{2} \frac{\partial p_e}{\partial t}
++ \frac{\partial q_{e\parallel}}{\partial z}
++ p_{e\parallel} \frac{\partial u_{e\parallel}}{\partial z}
++ \frac{3}{2} u_{e\parallel} \frac{\partial p_e}{\partial z}
++ \frac{3}{2} p_e \frac{\partial u_{e\parallel}}{\partial z} \nonumber \\
+&amp;\quad= -E_\mathrm{ioniz} n_e n_n R_\mathrm{ioniz}
+        + 3 n_e \frac{m_e}{m_i} \nu_{ei} \left( T_i - T_e \right)
+        + m_e n_e \nu_{ei} \left( u_{i\parallel} - u_{e_\parallel} \right)^2 \nonumber \\
+&amp;\qquad + \frac{3}{2} S_{e,p} \\
+\end{align}\]</p><p>The kinetic equation for <span>$\bar F_e = \int F_e d^2 w_\perp$</span> is</p><p class="math-container">\[\begin{align}
+\dot{z}_e \frac{\partial \bar{F}_e}{\partial z}
++ \dot{w}_{\parallel,e} \frac{\partial \bar{F}_e}{\partial w_\parallel}
+&amp;= \dot{\bar{F}}_e
+   + \bar{\mathcal{C}}_{ee} + \bar{\mathcal{C}}_{ei} + \bar{\mathcal{C}}_{en}
+   + \bar{\mathcal{S}}_e
+\end{align}\]</p><p class="math-container">\[\begin{align}
+\dot{z}_e &amp;= v_{Te} w_\parallel \\
+
+\dot{w}_{\parallel,e} &amp;= \frac{1}{n_e m_e v_{Te}} \frac{\partial p_{e\parallel}}{\partial z}
+                         + \frac{w_\parallel}{3 p_e} \frac{\partial q_{e\parallel}}{\partial z}
+                         - w_\parallel^2 \frac{\partial v_{T_e}}{\partial z} \nonumber \\
+                  &amp;\quad - \frac{1}{m_e n_e v_{Te}} (S_{e,\mathrm{mom}} - m_e u_{e\parallel} S_{e,n})
+                         - \frac{w_\parallel}{2 p_e} (S_{i,p} - T_e S_{e,n}) \\
+
+\frac{\dot{\bar{F}}_e}{\bar{F}_e} &amp;= w_\parallel \left( \frac{\partial v_{Te}}{\partial z} - \frac{v_{Te}}{n_e} \frac{\partial n_e}{\partial z} \right)
+                                     - \frac{1}{3 p_e} \frac{\partial q_{e\parallel}}{\partial z} \nonumber \\
+                              &amp;\quad + \frac{1}{2 p_e} S_{e,p}
+                                     - \frac{3}{2 n_e} S_{e,n} \\
+
+\bar{\mathcal{C}}_{ee} &amp;= \frac{v_{Te}}{n_e} \bar{C}_{K,ee} \\
+                       &amp;= -\frac{v_{Te}}{n_e} \nu_{ee} \left( \bar{f}_e - \frac{n_e}{\sqrt{\pi} \sqrt{2 T_{e\parallel}/m_e}} \exp\left( -\frac{m_e (v_\parallel - u_{e\parallel})^2}{2 T_{e\parallel}} \right) \right) \\
+                       &amp;= - \nu_{ee} \left( \bar{F}_e - \frac{1}{\sqrt{3 \pi}} \exp\left( - \frac{w_\parallel^2}{3} \right) \right) \\
+
+\bar{\mathcal{C}}_{ei} &amp;= \frac{v_{Te}}{n_e} \bar{C}_{K,ei} \\
+                       &amp;= -\frac{v_{Te}}{n_e} \nu_{ei} \left( \bar{f}_e - \frac{n_e}{\sqrt{\pi} \sqrt{2 T_{e\parallel}/m_e}} \exp\left( -\frac{m_e (v_\parallel - u_{i\parallel})^2}{2 T_{e\parallel}} \right) \right) \\
+                       &amp;= - \nu_{ei} \left( \bar{F}_e - \frac{1}{\sqrt{3 \pi}} \exp\left( - \frac{\left( w_\parallel - \frac{(u_{i\parallel} - u_{e\parallel})}{v_{Te}} \right)^2}{3} \right) \right) \\
+
+\bar{\mathcal{C}}_{en} &amp;= \text{not implemented yet} \\
+
+\bar{\mathcal{S}}_{e} &amp;= \frac{v_{Te}}{n_e} \bar{S}_e = \frac{v_{Te}}{n_e} \int S_e d^2 v_\perp \\
+\end{align}\]</p><p>recalling that <span>$\int w_\perp \frac{\partial F_e}{\partial w_\perp} d^2 w_\perp = 2 \bar F_e$</span> as for the ions, and noting that in the <span>$T_{e,\perp} = 0$</span> limit, <span>$T_{e\parallel} = T_e/3$</span> so that <span>$v_{Te}^2 = 2T_e/m_e = 6 T_{e\parallel}/m_e$</span>.</p><h2 id="Dimensionless-equations"><a class="docs-heading-anchor" href="#Dimensionless-equations">Dimensionless equations</a><a id="Dimensionless-equations-1"></a><a class="docs-heading-anchor-permalink" href="#Dimensionless-equations" title="Permalink"></a></h2><p>We make the equations dimensionless using the <a href="../moment_kinetic_equations/#Dimensionless-equations-for-code">conversions defined here</a>.</p><h3 id="1D2V"><a class="docs-heading-anchor" href="#1D2V">1D2V</a><a id="1D2V-1"></a><a class="docs-heading-anchor-permalink" href="#1D2V" title="Permalink"></a></h3><p>The moment equations become</p><p class="math-container">\[\begin{align}
+\hat{n}_e &amp;= \hat{n}_i \\
+
+\hat{u}_{e\parallel} &amp;= \hat{u}_{i\parallel} \\
+
+\hat{E}_\parallel &amp;= -\frac{1}{\hat{n}_e} \frac{\partial \hat{p}_{e\parallel}}{\partial \hat{z}}
+                     + \frac{\hat{F}_{ei\parallel}}{\hat{n}_e}
+                     + \frac{\hat{m}_e}{\hat{n}_e} \int \hat{v}_\parallel \hat{C}_{en} d^3 \hat{v}
+                     + \frac{1}{\hat{n}_e} \hat{S}_{e,\mathrm{mom}} \\
+\hat{E}_\parallel &amp;= -\frac{1}{\hat{n}_e} \frac{\partial \hat{p}_{e\parallel}}{\partial \hat{z}}
+                     + \hat{m}_e \hat{\nu}_{ei} \left( \hat{u}_{i\parallel} - \hat{u}_{e\parallel} \right)
+                     + \frac{1}{\hat{n}_e} \hat{S}_{e,\mathrm{mom}} \\
+\end{align}\]</p><p class="math-container">\[\begin{align}
+&amp;\frac{3}{2} \frac{\partial \hat{p}_e}{\partial \hat{t}}
++ \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}}
++ \hat{p}_{e\parallel} \frac{\partial \hat{u}_{e\parallel}}{\partial \hat{z}}
++ \frac{3}{2} \hat{u}_{e\parallel} \frac{\partial \hat{p}_e}{\partial \hat{z}}
++ \frac{3}{2} \hat{p}_e \frac{\partial \hat{u}_{e\parallel}}{\partial \hat{z}} \nonumber \\
+&amp;\quad= -\hat{E}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \hat{R}_\mathrm{ioniz}
+        + \int \frac{1}{2} \hat{m}_e |\hat{\boldsymbol{v}} - \hat{u}_{e\parallel} \hat{\boldsymbol{z}}|^2 \hat{C}_{ei} d^3 v
+        + \int \frac{1}{2} \hat{m}_e |\hat{\boldsymbol{v}} - \hat{u}_{e\parallel} \hat{\boldsymbol{z}}|^2 \hat{C}_{en} d^3 v \nonumber \\
+&amp;\qquad + \frac{3}{2} \hat{S}_{e,p} \\
+
+&amp;\frac{3}{2} \frac{\partial \hat{p}_e}{\partial \hat{t}}
++ \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}}
++ \hat{p}_{e\parallel} \frac{\partial \hat{u}_{e\parallel}}{\partial \hat{z}}
++ \frac{3}{2} \hat{u}_{e\parallel} \frac{\partial \hat{p}_e}{\partial \hat{z}}
++ \frac{3}{2} \hat{p}_e \frac{\partial \hat{u}_{e\parallel}}{\partial \hat{z}} \nonumber \\
+&amp;\quad= -\hat{E}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \hat{R}_\mathrm{ioniz}
+        + 3 \hat{n}_e \frac{\hat{m}_e}{\hat{m}_i} \hat{\nu}_{ei} \left( \hat{T}_i - \hat{T}_e \right)
+        + \hat{m}_e \hat{n}_e \hat{\nu}_{ei} \left( \hat{u}_{i\parallel} - \hat{u}_{e_\parallel} \right)^2 \nonumber \\
+&amp;\qquad + \frac{3}{2} \hat{S}_{e,p} \\
+\end{align}\]</p><p>and the dimensionless kinetic equation is</p><p class="math-container">\[\begin{align}
+\hat{\dot{z}}_e \frac{\partial F_e}{\partial \hat{z}}
++ \hat{\dot{w}}_{\parallel,e} \frac{\partial F_e}{\partial w_\parallel}
++ \hat{\dot{w}}_{\perp,e} \frac{\partial F_e}{\partial w_\perp}
+&amp;= \hat{\dot{F}}_e + \hat{\mathcal{C}}_{ee} + \hat{\mathcal{C}}_{ei} + \hat{\mathcal{C}}_{en} + \hat{\mathcal{S}}_e
+\end{align}\]</p><p>where</p><p class="math-container">\[\begin{align}
+\hat{\dot{z}}_e &amp;= \hat{v}_{Te} w_\parallel \\
+
+\hat{\dot{w}}_{\parallel,e} &amp;= \frac{1}{\hat{n}_e \hat{m}_e \hat{v}_{Te}} \frac{\partial \hat{p}_{e\parallel}}{\partial \hat{z}}
+                               + \frac{w_\parallel}{3 \hat{p}_e} \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}}
+                               - w_\parallel^2 \frac{\partial \hat{v}_{T_e}}{\partial \hat{z}} \nonumber \\
+                        &amp;\quad - \frac{1}{\hat{m}_e \hat{n}_e \hat{v}_{Te}} (S_{e,\mathrm{mom}} - m_e u_{e\parallel} S_{e,n})
+                               - \frac{w_\parallel}{2 \hat{p}_e} (\hat{S}_{e,p} - T_e S_{e,n}) \\
+
+\hat{\dot{w}}_{\perp,e} &amp;= \frac{w_\perp}{3 \hat{p}_e} \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}}
+                           - w_\perp w_\parallel \frac{\partial \hat{v}_{Te}}{\partial \hat{z}} \nonumber \\
+                    &amp;\quad - \frac{w_\perp}{2 \hat{p}_e} ()\hat{S}_{e,p} - T_e \hat{S}_{e,n}) \\
+
+\frac{\hat{\dot{F}}_e}{F_e} &amp;= w_\parallel \left( 3 \frac{\partial \hat{v}_{Te}}{\partial \hat{z}} - \frac{\hat{v}_{Te}}{\hat{n}_e} \frac{\partial \hat{n}_e}{\partial \hat{z}} \right)
+                               - \frac{1}{\hat{p}_e} \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}} \nonumber \\
+                        &amp;\quad + \frac{3}{2 \hat{p}_e} \hat{S}_{e,p}
+                               - \frac{5}{2 \hat{n}_e} \hat{S}_{e,n} \\
+
+\hat{\mathcal{C}}_{ee} &amp;= \frac{\hat{v}_{Te}^3}{\hat{n}_e} \hat{C}_{K,ee} \\
+                       &amp;= -\frac{\hat{v}_{Te}^3}{\hat{n}_e} \hat{\nu}_{ee} \left( \hat{f}_e - \frac{\hat{n}_e}{\pi^{3/2} \hat{v}_{Te}^3} \exp\left( -\frac{|\hat{\boldsymbol{v}} - \hat{u}_{e\parallel}\hat{\boldsymbol{z}}|^2}{\hat{v}_{Te}^2} \right) \right) \\
+                       &amp;= - \hat{\nu}_{ee} \left( F_e - \frac{1}{\pi^{3/2}} \exp\left( -w^2 \right) \right) \\
+
+\hat{\mathcal{C}}_{ei} &amp;= \frac{\hat{v}_{Te}^3}{\hat{n}_e} \hat{C}_{K,ei} \\
+                       &amp;= -\frac{\hat{v}_{Te}^3}{\hat{n}_e} \hat{\nu}_{ei} \left( \hat{f}_e - \frac{\hat{n}_e}{\pi^{3/2} \hat{v}_{Te}^3} \exp\left( -\frac{|\hat{\boldsymbol{v}} - \hat{u}_{i\parallel}\hat{\boldsymbol{z}}|^2}{\hat{v}_{Te}^2} \right) \right) \\
+                       &amp;= - \hat{\nu}_{ei} \left( F_e - \frac{1}{\pi^{3/2}} \exp\left( -\left( w_\parallel - \frac{(\hat{u}_{i\parallel} - \hat{u}_{e\parallel})}{\hat{v}_{Te}} \right)^2 - w_\perp^2 \right) \right) \\
+
+\hat{\mathcal{C}}_{en} &amp;= \text{not implemented yet} \\
+
+\hat{\mathcal{S}}_{e} &amp;= \frac{\hat{v}_{Te}^3}{\hat{n}_e} \hat{S}_e \\
+\end{align}\]</p><h3 id="1D1V"><a class="docs-heading-anchor" href="#1D1V">1D1V</a><a id="1D1V-1"></a><a class="docs-heading-anchor-permalink" href="#1D1V" title="Permalink"></a></h3><p>In 1D1V the dimsionless energy equation is</p><p class="math-container">\[\begin{align}
+&amp;\frac{3}{2} \frac{\partial \hat{p}_e}{\partial \hat{t}}
++ \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}}
++ \hat{p}_{e\parallel} \frac{\partial \hat{u}_{e\parallel}}{\partial \hat{z}}
++ \frac{3}{2} \hat{u}_{e\parallel} \frac{\partial \hat{p}_e}{\partial \hat{z}}
++ \frac{3}{2} \hat{p}_e \frac{\partial \hat{u}_{e\parallel}}{\partial \hat{z}} \nonumber \\
+&amp;\quad= -\hat{E}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \hat{R}_\mathrm{ioniz}
+        + \int \frac{1}{2} \hat{m}_e (\hat{v}_\parallel - \hat{u}_{e\parallel})^2 \hat{\bar{C}}_{ei} d\hat{v}_\parallel
+        + \int \frac{1}{2} \hat{m}_e (\hat{v}_\parallel - \hat{u}_{e\parallel})^2 \hat{\bar{C}}_{en} d\hat{v}_\parallel \nonumber \\
+&amp;\qquad + \frac{3}{2} \hat{\bar{S}}_{e,p} \\
+
+&amp;\frac{3}{2} \frac{\partial \hat{p}_e}{\partial \hat{t}}
++ \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}}
++ \hat{p}_{e\parallel} \frac{\partial \hat{u}_{e\parallel}}{\partial \hat{z}}
++ \frac{3}{2} \hat{u}_{e\parallel} \frac{\partial \hat{p}_e}{\partial \hat{z}}
++ \frac{3}{2} \hat{p}_e \frac{\partial \hat{u}_{e\parallel}}{\partial \hat{z}} \nonumber \\
+&amp;\quad= -\hat{E}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \hat{R}_\mathrm{ioniz}
+        + 3 \hat{n}_e \frac{\hat{m}_e}{\hat{m}_i} \hat{\nu}_{ei} \left( \hat{T}_i - \hat{T}_e \right)
+        + \hat{m}_e \hat{n}_e \hat{\nu}_{ei} \left( \hat{u}_{i\parallel} - \hat{u}_{e_\parallel} \right)^2 \nonumber \\
+&amp;\qquad + \frac{3}{2} \hat{\bar{S}}_{e,p} \\
+\end{align}\]</p><p>and the dimensionless kinetic equation is</p><p class="math-container">\[\begin{align}
+\hat{\dot{z}}_e \frac{\partial \bar{F}_e}{\partial \hat{z}}
++ \hat{\dot{w}}_{\parallel,e} \frac{\partial \bar{F}_e}{\partial w_\parallel}
+&amp;= \hat{\dot{\bar{F}}}_e
+   + \hat{\bar{\mathcal{C}}}_{ee} + \hat{\bar{\mathcal{C}}}_{ei} + \hat{\bar{\mathcal{C}}}_{en}
+   + \hat{\bar{\mathcal{S}}}_e
+\end{align}\]</p><p class="math-container">\[\begin{align}
+\hat{\dot{z}}_e &amp;= \hat{v}_{Te} w_\parallel \\
+
+\hat{\dot{w}}_{\parallel,e} &amp;= \frac{1}{\hat{n}_e \hat{m}_e \hat{v}_{Te}} \frac{\partial \hat{p}_{e\parallel}}{\partial \hat{z}}
+                               + \frac{w_\parallel}{3 \hat{p}_e} \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}}
+                               - w_\parallel^2 \frac{\partial \hat{v}_{T_e}}{\partial \hat{z}} \nonumber \\
+                        &amp;\quad - \frac{1}{\hat{m}_e \hat{n}_e \hat{v}_{Te}} (\hat{S}_{e,\mathrm{mom}} - \hat{m}_e \hat{u}_{e\parallel} \hat{S}_{e,n})
+                               - \frac{w_\parallel}{2 \hat{p}_e} (\hat{S}_{e,p} - \hat{T}_e \hat{S}_{e,n}) \\
+
+\frac{\hat{\dot{\bar{F}}}_e}{\bar{F}_e} &amp;= w_\parallel \left( \frac{\partial \hat{v}_{Te}}{\partial \hat{z}} - \frac{\hat{v}_{Te}}{\hat{n}_e} \frac{\partial \hat{n}_e}{\partial \hat{z}} \right)
+                                     - \frac{1}{3 \hat{p}_e} \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}} \nonumber \\
+                              &amp;\quad + \frac{1}{2 \hat{p}_e} \hat{S}_{e,p}
+                                     - \frac{3}{2 \hat{n}_e} \hat{S}_{e,n} \\
+
+\hat{\bar{\mathcal{C}}}_{ee} &amp;= \frac{\hat{v}_{Te}}{\hat{n}_e} \hat{\bar{C}}_{K,ee} \\
+                             &amp;= - \hat{\nu}_{ee} \left( \bar{F}_e - \frac{1}{\sqrt{3 \pi}} \exp\left( - \frac{w_\parallel^2}{3} \right) \right) \\
+
+\hat{\bar{\mathcal{C}}}_{ei} &amp;= \frac{\hat{v}_{Te}}{\hat{n}_e} \hat{\bar{C}}_{K,ei} \\
+                             &amp;= - \hat{\nu}_{ei} \left( \bar{F}_e - \frac{1}{\sqrt{3 \pi}} \exp\left( - \frac{\left( w_\parallel - \frac{(\hat{u}_{i\parallel} - \hat{u}_{e\parallel})}{\hat{v}_{Te}} \right)^2}{3} \right) \right) \\
+
+\hat{\bar{\mathcal{C}}}_{en} &amp;= \text{not implemented yet} \\
+
+\hat{\bar{\mathcal{S}}}_{e} &amp;= \frac{\hat{v}_{Te}}{\hat{n}_e} \hat{\bar{S}}_e = \frac{\hat{v}_{Te}}{\hat{n}_e} \int \hat{S}_e d^2 \hat{v}_\perp \\
+\end{align}\]</p><p>The conversion to the dimensionless equations in the 1D1V Excalibur reports, and the original version of the code, uses the <a href="../moment_kinetic_equations/#Conversion-to-old-dimensionless-equations">conversions given here</a>.</p><h2 id="Old-1D1V-kinetic-electron-equations"><a class="docs-heading-anchor" href="#Old-1D1V-kinetic-electron-equations">Old 1D1V kinetic electron equations</a><a id="Old-1D1V-kinetic-electron-equations-1"></a><a class="docs-heading-anchor-permalink" href="#Old-1D1V-kinetic-electron-equations" title="Permalink"></a></h2><p>These were the form of equations implemented in the code for kinetic electrons before PR #322, April 2025.</p><details>
+<summary style="text-align:center">[ notes using old definitions and dimensionless variables ]</summary><p class="math-container">\[\begin{align}
+n_e &amp;= n_i \\
+\end{align}\]</p><p class="math-container">\[\begin{align}
+\Gamma_{\parallel,\mathrm{net}}(z=-L_z/2) &amp;= (n_i(z=-L_z/2) u_{i\parallel}(z=-L_z/2) - n_e(z=-L_z/2) u_{e\parallel}(z=-L_z/2)) = 0 \\
+u_{e\parallel} &amp;= \frac{\left( -\Gamma_{\parallel,\mathrm{net}}(z=-L_z/2) + n_i u_i \right)}{n_e} \\
+\end{align}\]</p><p class="math-container">\[\begin{align}
+E_\parallel &amp;= - \frac{2}{n_e} \frac{\partial p_{e\parallel}}{\partial z} \\
+\end{align}\]</p><p class="math-container">\[\begin{align}
+\frac{\partial p_{e\parallel}}{\partial t}
+  &amp;= -u_{e\parallel} \frac{\partial p_{e\parallel}}{\partial z}
+     - 3 p_{e\parallel} \frac{\partial u_{e\parallel}}{\partial z}
+     - \frac{\partial q_{e\parallel}}{\partial z}
+     + D_{p_e,z} \frac{\partial^2 p_{e\parallel}}{\partial z^2} + S_{p,e} \\
+\end{align}\]</p><p>where <span>$D_{p_e,z}$</span> is a numerical diffusion coefficient, which we usually leave as 0.</p><p class="math-container">\[\begin{align}
+\frac{\partial g_e}{\partial t}
+  + \dot{z} \frac{\partial g_e}{\partial z}
+  + \dot{w}_\parallel \frac{\partial g_e}{\partial w_\parallel}
+&amp;= \dot{g} + \mathcal{D}_\mathrm{num} + \mathcal{C}_{K,e} + \mathcal{S}_e
+\end{align}\]</p><p>where</p><p class="math-container">\[\begin{align}
+\dot{z} &amp;= v_{Te} w_\parallel + u_{e\parallel} \\
+\end{align}\]</p><p class="math-container">\[\begin{align}
+\dot{w}_\parallel
+&amp;= \frac{v_{Te}}{2 p_{e\parallel}} \frac{\partial p_{e\parallel}}{\partial z} + \frac{w_\parallel}{2 p_{e\parallel}} \frac{\partial q_{e\parallel}}{\partial z}
+   - w_\parallel^2 \frac{\partial v_{Te}}{\partial z}
+   + \frac{S_{n,e} u_{e\parallel}}{n_e v_{Te}}
+   - w_\parallel \frac{S_{p,e} + 2 u_{e\parallel} S_{\mathrm{mom},e}}{2 p_{e\parallel}}
+   + w_\parallel \frac{S_n}{2 n_e}
+\end{align}\]</p><p>Think this is missing a <span>$S_{\mathrm{mom},e}$</span> term that is not multiplied by <span>$w_\parallel$</span> and has an extra one that is multiplied by <span>$w_\parallel$</span>, but so far <span>$S_{\mathrm{mom},s}$</span> is always zero anyway, so this doesn&#39;t matter.</p><p class="math-container">\[\begin{align}
+\frac{\dot{g}_e}{g_e}
+&amp;= -\frac{1}{2 p_{e\parallel}} \frac{\partial q_{e\parallel}}{\partial z}
+   - w_\parallel v_{Te} \left( \frac{1}{n_e} \frac{\partial n_e}{\partial z}
+                               - \frac{1}{v_{Te}} \frac{\partial v_{Te}}{\partial z} \right)
+   - \frac{3 S_n}{2 n_e} + \frac{S_{p,e}/2 + S_{\mathrm{mom},e}}{p_{e\parallel}}
+\end{align}\]</p><p class="math-container">\[\begin{align}
+\mathcal{D}_\mathrm{num}
+&amp;= D_{w_\parallel,e} \frac{\partial^2 g_e}{\partial w_\parallel^2}
+\end{align}\]</p><p class="math-container">\[\begin{align}
+\mathcal{C}_{K,e}
+&amp;= \nu_{ee} \left[ g_e - \exp\left( -w_\parallel^2 \right) \right]
+   + \nu_{ei} \left[ g_e - \exp\left( -\left( w_\parallel + (u_{i\parallel} - u_{e\parallel})/v_{Te} \right)^2 \right) \right]
+\end{align}\]</p><p class="math-container">\[\begin{align}
+\mathcal{S}_e
+&amp;= \frac{v_{Te}}{n_e} S_e
+\end{align}\]</p></details></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../moment_kinetic_equations/">« Moment kinetic equations</a><a class="docs-footer-nextpage" href="../parameter_scans/">Parameter scans »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Wednesday 8 October 2025 16:23">Wednesday 8 October 2025</span>. Using Julia version 1.11.7.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
