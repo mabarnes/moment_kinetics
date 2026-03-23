@@ -11,7 +11,7 @@ Get information needed for submitting a run
 using TOML
 
 
-function failure()
+function failure(name)
     println("Missing `$name` preference. Need to run `setup_moment_kinetics()` before "
             * "using this script.")
     exit(1)
@@ -20,18 +20,22 @@ end
 settings_string = ""
 
 if !isfile("LocalPreferences.toml")
-    failure()
+    println("Missing LocalPreferences.toml file. Need to run `setup_moment_kinetics()` "
+            * "before using this script.")
+    exit(1)
 end
 local_preferences = TOML.parsefile("LocalPreferences.toml")
 
 if "moment_kinetics" ∉ keys(local_preferences)
-    failure()
+    println("No [moment_kinetics] section in LocalPreferences.toml. Need to run "
+            * "`setup_moment_kinetics()` before using this script.")
+    exit(1)
 end
 mk_preferences = local_preferences["moment_kinetics"]
 
 function check_and_get_pref(name)
     if name ∉ keys(mk_preferences)
-        failure()
+        failure(name)
     end
     return string(mk_preferences[name]) * " "
 end
