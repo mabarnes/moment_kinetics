@@ -261,6 +261,8 @@ function makie_post_process(run_dir::Union{String,Vector{String}},
 
     collisionality_plots(run_info, run_info_dfns, plot_prefix)
 
+    trapping_plots(run_info, run_info_dfns, plot_prefix)
+
     #mk_1D1V_term_size_diagnostics(run_info, run_info_dfns, plot_prefix)
 
     manufactured_solutions_analysis(run_info; plot_prefix=plot_prefix)

@@ -79,6 +79,7 @@ include("instability2d.jl")
 include("mms.jl")
 include("timestep_diagnostics.jl")
 include("collisionality.jl")
+include("trapping.jl")
 include("performance_analysis.jl")
 
 end
