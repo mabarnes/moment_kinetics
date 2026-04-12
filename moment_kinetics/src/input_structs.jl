@@ -423,6 +423,7 @@ Base.@kwdef struct ion_source_data
     PI_temperature_controller_I::mk_float
     PI_temperature_target_amplitude::mk_float
     recycling_controller_fraction::mk_float
+    fake_recycling_fraction::mk_float
     # r_amplitude through the r coordinate (in 1D this can just be set to 1.0)
     r_amplitude::Vector{mk_float}
     # z_amplitude through the z coordinate, which will have your gaussian profile,

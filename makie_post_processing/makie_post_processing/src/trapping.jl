@@ -59,10 +59,26 @@ function trapping_plots(run_info, run_info_dfns, plot_prefix=nothing)
             # Use the limits of the existing plot so that lines!() doesn't change the limits
             xl = ax.finallimits[].origin[1], ax.finallimits[].origin[1] + ax.finallimits[].widths[1]
             yl = ax.finallimits[].origin[2], ax.finallimits[].origin[2] + ax.finallimits[].widths[2]
-            lines!(ax, vpa_values, vperp_values, color=:red)
+            lines!(ax, vpa_values, vperp_values, color=:red, linewidth = 1.0)
             xlims!(ax, xl...)
             ylims!(ax, yl...)
             outfile = variable_prefix * "_vs_vpa_vperp.pdf"
+            save(outfile, fig)
+
+        end
+
+        if input.plot_Ez_and_dBdz
+            Ez = get_variable(run_info_dfns, "Ez")[1][:,1,end]
+            dBdz = run_info_dfns[1].geometry.dBdz[:,1]
+            fig, ax, = get_1d_ax()
+            plot_1d(run_info_dfns[1].z.grid, -dBdz; ax=ax, xlabel="z", ylabel="dBdz", title="Ez and dB/dz vs z")
+            autolimits!(ax)
+            yl = ax.finallimits[].origin[2], ax.finallimits[].origin[2] + ax.finallimits[].widths[2]
+            lines!(ax, run_info_dfns[1].z.grid, Ez, color=:red, label="Ez")
+            ylims!(ax, yl)
+            # plot_1d(run_info_dfns[1].z.grid, Ez; ax=ax, xlabel="z", ylabel="Ez", title="Ez vs z")
+            # lines!(ax, run_info_dfns[1].z.grid, -dBdz, color=:red, label="dB/dz")
+            outfile = plot_prefix * "Ez_and_dBdz_vs_z.pdf"
             save(outfile, fig)
 
         end

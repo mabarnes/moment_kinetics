@@ -90,22 +90,23 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
                      PI_temperature_controller_I=0.0,
                      PI_temperature_target_amplitude=1.0,
                      recycling_controller_fraction=0.0,
+                     fake_recycling_fraction=0.9,
                     )
 
         r_amplitude = get_source_profile(input["r_profile"], input["r_width"],
-                                         input["r_relative_minimum"], r)
+                                         input["r_relative_minimum"], r; fake_recycling_fraction=input["fake_recycling_fraction"])
         z_amplitude = get_source_profile(input["z_profile"], input["z_width"],
-                                         input["z_relative_minimum"], z)
+                                         input["z_relative_minimum"], z; fake_recycling_fraction=input["fake_recycling_fraction"])
         if input["source_type"] == "density_profile_control"
             PI_density_target_amplitude = input["PI_density_target_amplitude"]
             PI_density_target_r_factor =
                 get_source_profile(input["PI_density_target_r_profile"],
                     input["PI_density_target_r_width"],
-                    input["PI_density_target_r_relative_minimum"], r)
+                    input["PI_density_target_r_relative_minimum"], r; fake_recycling_fraction=input["fake_recycling_fraction"])
             PI_density_target_z_factor =
                 get_source_profile(input["PI_density_target_z_profile"],
                     input["PI_density_target_z_width"],
-                    input["PI_density_target_z_relative_minimum"], z)
+                    input["PI_density_target_z_relative_minimum"], z; fake_recycling_fraction=input["fake_recycling_fraction"])
             if ignore_MPI
                 PI_density_target = allocate_float(z, r)
             else
@@ -242,9 +243,9 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
         input = deepcopy(input)
         source_T = input["source_T"]
         r_amplitude_T = get_source_profile(input["r_profile_T"], input["r_width_T"],
-                                           input["r_relative_minimum_T"], r)
+                                           input["r_relative_minimum_T"], r; fake_recycling_fraction=input["fake_recycling_fraction"])
         z_amplitude_T = get_source_profile(input["z_profile_T"], input["z_width_T"],
-                                           input["z_relative_minimum_T"], z)
+                                           input["z_relative_minimum_T"], z; fake_recycling_fraction=input["fake_recycling_fraction"])
         if ignore_MPI
             source_T_array = allocate_float(z, r)
         else
@@ -541,7 +542,7 @@ end
 
 Create a profile of type `profile_type` with width `width` for coordinate `coord`.
 """
-function get_source_profile(profile_type, width, relative_minimum, coord)
+function get_source_profile(profile_type, width, relative_minimum, coord; kwargs...)
     if width < 0.0
         error("width must be ≥0, got $width")
     end
@@ -579,6 +580,17 @@ function get_source_profile(profile_type, width, relative_minimum, coord)
         L = coord.L
         return @. (1.0 - relative_minimum) * exp(-(x+0.5*L) / width) + relative_minimum +
                   (1.0 - relative_minimum) * exp(-(0.5*L-x) / width) + relative_minimum
+    # For the coupled PI controllers, the source strength and PI controller amplitudes must be the 
+    # same for both sources. The wall exp decay coupled PI source will 
+    # consistently have the same overall particle source amplitude regardless of width, assuming that the
+    # width is small enough for each wall source to decay by the time it hits the other wall.
+    # For a different recycling fraction, the coefficient of the super gaussian 4 coupled PI source 
+    # has been set so that if you input a fake recycling fraction out of 1.0, e.g. 0.9, then the source
+    # amplitude will be adjusted so that the ratio of the wall_exp_decay source to the super gaussian 4
+    # source is the that ratio, which becomes the same idea as recycling fraction when in steady state.
+    # A better but longer name for the fake_recycling_fraction would be something like 
+    # "ratio of [number of particles being supplied to the domain via the wall exp decay particle source] to [total 
+    # number of particles being supplied to the domain by both sources] "
     elseif profile_type == "wall_exp_decay_coupled_PI"
         x = coord.grid
         L = coord.L
@@ -589,7 +601,8 @@ function get_source_profile(profile_type, width, relative_minimum, coord)
         return @. (1.0 - relative_minimum) * exp(-(x / width)^4) + relative_minimum
     elseif profile_type == "super_gaussian_4_coupled_PI"
         x = coord.grid
-        return @. ((1.0 - relative_minimum) * exp(-(x / width)^4) + relative_minimum)*0.3
+        fake_recycling_fraction = kwargs[:fake_recycling_fraction]
+        return @. ((1.0 - relative_minimum) * exp(-(x / width)^4) + relative_minimum)*((25/(fake_recycling_fraction) - 25)/6)
     elseif profile_type == "sinusoid"
         # Set so that profile can be 1 on the inner/lower boundary
         x = coord.grid
