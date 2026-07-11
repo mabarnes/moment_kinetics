@@ -438,7 +438,9 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         this_input_dict, "trapping_plots", warn_unexpected;
         plot=true,
         plot_trapped_passing_boundary_at_midplane=false,
+        plot_E_field_accelerated_particles=false,
         plot_Ez_and_dBdz=false,
+        plot_phi_and_B=false,
         animation_ext = "gif"
        )
     # set_defaults_and_check_section!(

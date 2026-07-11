@@ -13,7 +13,8 @@ function trapping_plots(run_info, run_info_dfns, plot_prefix=nothing)
     input = Dict_to_NamedTuple(input_dict["trapping_plots"])
 
     if length(run_info_dfns) > 1
-        error("trapping_plots() not currently implemented for multiple runs, as multiple ax arguments can't be passed to plot_2d().")
+        println("Error: trapping_plots() not currently implemented for multiple runs, as multiple ax arguments can't be passed to plot_2d().")
+        return nothing
     end
 
     if input.plot
@@ -37,10 +38,13 @@ function trapping_plots(run_info, run_info_dfns, plot_prefix=nothing)
             B_top_index = argmax(run_info_dfns[1].geometry.Bmag[:,1])
             B_bottom_index = z_midpoint
             B_bottom = run_info_dfns[1].geometry.Bmag[B_bottom_index]
-            phi_top = get_variable(run_info_dfns, "phi")[1][B_top_index,1,end]
-            phi_bottom = get_variable(run_info_dfns, "phi")[1][B_bottom_index,1,end]
+            phi = get_variable(run_info_dfns, "phi")[1][:,1,end]
+            # phi_top = get_variable(run_info_dfns, "phi")[1][B_top_index,1,end]
+            # phi_bottom = get_variable(run_info_dfns, "phi")[1][B_bottom_index,1,end]
+            phi_top = phi[B_top_index]
+            phi_bottom = phi[B_bottom_index]
             plot_2d(run_info_dfns[1].vpa.grid, run_info_dfns[1].vperp.grid, variable; ax=ax, 
-                    colorbar_place = colorbar_place, xlabel="vpa", ylabel="vperp", title="f at midplane")
+                    colorbar_place = colorbar_place, xlabel="vpa", ylabel="vperp", title="f at midplane")#, colorrange=(0.0,0.3))
 
             # calculate x values and y values for trapped-passing boundary
             vpa_limits = run_info_dfns[1].vpa.grid[1], run_info_dfns[1].vpa.grid[end]
@@ -59,7 +63,30 @@ function trapping_plots(run_info, run_info_dfns, plot_prefix=nothing)
             # Use the limits of the existing plot so that lines!() doesn't change the limits
             xl = ax.finallimits[].origin[1], ax.finallimits[].origin[1] + ax.finallimits[].widths[1]
             yl = ax.finallimits[].origin[2], ax.finallimits[].origin[2] + ax.finallimits[].widths[2]
-            lines!(ax, vpa_values, vperp_values, color=:red, linewidth = 1.0)
+            lines!(ax, vpa_values, vperp_values, color=:red, linewidth = 0.8)
+
+            if input.plot_E_field_accelerated_particles
+                z_length = run_info_dfns[1].z.n
+                half_z_length = z_length%2==0 ? Int(z_length/2) : Int((z_length + 1) / 2)
+                phi_max = maximum(phi[1:half_z_length])
+                phi_mid = phi_bottom
+                mid_upar = sqrt(2 * (phi_max - phi_mid))
+                arrow_x = if run_info_dfns[1].evolve_density && run_info_dfns[1].evolve_upar && run_info_dfns[1].evolve_p
+                    [mid_upar/midpoint_thermal_speed, -mid_upar/midpoint_thermal_speed]
+                else
+                    [mid_upar, -mid_upar]
+                end
+
+                arrow_length = 1.0  # tune to taste
+                for x in arrow_x
+                    arrows2d!(ax, [x], [-arrow_length], [0.0], [arrow_length],
+                            color=:cyan, tipwidth=10, tiplength=10, tailwidth=1.5,
+                            label="E-field accelerated particles")
+                    # vlines!(ax, x, color=:cyan, linewidth=1.5)
+                    scatter!(ax, [x], [0.04], markersize = 8, color=:purple, marker=:xcross, overdraw=true, label="E-field accelerated particles")  # add a point at the base of the arrow for clarity
+                end
+            end
+
             xlims!(ax, xl...)
             ylims!(ax, yl...)
             outfile = variable_prefix * "_vs_vpa_vperp.pdf"
@@ -76,11 +103,27 @@ function trapping_plots(run_info, run_info_dfns, plot_prefix=nothing)
             yl = ax.finallimits[].origin[2], ax.finallimits[].origin[2] + ax.finallimits[].widths[2]
             lines!(ax, run_info_dfns[1].z.grid, Ez, color=:red, label="Ez")
             ylims!(ax, yl)
-            # plot_1d(run_info_dfns[1].z.grid, Ez; ax=ax, xlabel="z", ylabel="Ez", title="Ez vs z")
-            # lines!(ax, run_info_dfns[1].z.grid, -dBdz, color=:red, label="dB/dz")
+
             outfile = plot_prefix * "Ez_and_dBdz_vs_z.pdf"
             save(outfile, fig)
+        end
 
+        if input.plot_phi_and_B
+            old_phi = get_variable(run_info_dfns, "phi")[1][:,1,end]
+            # adjust phi
+            B = run_info_dfns[1].geometry.Bmag[:,1]
+            phi = old_phi .- old_phi[1] .+ B[1]
+            fig, ax, = get_1d_ax()
+            plot_1d(run_info_dfns[1].z.grid, B; ax=ax, xlabel="z", ylabel="B", title="B and phi vs z")
+            # autolimits!(ax)
+            # yl = ax.finallimits[].origin[2], ax.finallimits[].origin[2] + ax.finallimits[].widths[2]
+            lines!(ax, run_info_dfns[1].z.grid, phi, color=:red, label="phi")
+            # ylims!(ax, yl)
+            # plot_1d(run_info_dfns[1].z.grid, phi; ax=ax, xlabel="z", ylabel="phi", title="phi vs z")
+            # lines!(ax, run_info_dfns[1].z.grid, B, color=:red, label="B")
+            outfile = plot_prefix * "phi_and_B_vs_z.pdf"
+            axislegend(ax, position=:rt)
+            save(outfile, fig)
         end
     end
 end
