@@ -33,7 +33,7 @@ using ..velocity_moments: calculate_electron_moment_derivatives!, update_derived
 using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
 using ..boundary_conditions
 using ..boundary_conditions: get_ion_z_boundary_cutoff_indices, enforce_vperp_boundary_condition!
-using ..boundary_conditions: vpagrid_to_vpa, enforce_v_boundary_condition_local!,
+using ..boundary_conditions: vpagrid_to_vpa, enforce_vpa_boundary_condition_local!,
                              skip_f_electron_bc_points_in_Jacobian,
                              skip_f_electron_bc_points_in_Jacobian_v_solve,
                              skip_f_electron_bc_points_in_Jacobian_z_solve
@@ -4496,7 +4496,7 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
         if vpa.n > 1
             @begin_s_r_z_vperp_region()
             @loop_s_r_z_vperp is ir iz ivperp begin
-                @views enforce_v_boundary_condition_local!(x[:,ivperp,iz,ir,is], vpa.bc,
+                @views enforce_vpa_boundary_condition_local!(x[:,ivperp,iz,ir,is], vpa.bc,
                                                            vpa_advect[:,ivperp,iz,ir,is],
                                                            advance.vpa_diffusion, vpa,
                                                            vpa_spectral)

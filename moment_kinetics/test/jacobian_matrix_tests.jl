@@ -7,7 +7,7 @@ include("setup.jl")
 using moment_kinetics: setup_moment_kinetics, cleanup_moment_kinetics!
 using moment_kinetics.analysis: vpagrid_to_vpa
 using moment_kinetics.array_allocation: allocate_shared_float
-using moment_kinetics.boundary_conditions: enforce_v_boundary_condition_local!,
+using moment_kinetics.boundary_conditions: enforce_vpa_boundary_condition_local!,
                                            enforce_vperp_boundary_condition!,
                                            skip_f_electron_bc_points_in_Jacobian,
                                            skip_f_electron_bc_points_in_Jacobian_v_solve,
@@ -714,7 +714,7 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
             if vpa.n > 1
                 @begin_anyzv_z_vperp_region()
                 @loop_z_vperp iz ivperp begin
-                    @views enforce_v_boundary_condition_local!(residual[:,ivperp,iz], vpa.bc,
+                    @views enforce_vpa_boundary_condition_local!(residual[:,ivperp,iz], vpa.bc,
                                                                vpa_advect[:,ivperp,iz,ir],
                                                                num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
                                                                vpa, vpa_spectral)
@@ -1676,7 +1676,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             if vpa.n > 1
                 @begin_anyzv_z_vperp_region()
                 @loop_z_vperp iz ivperp begin
-                    @views enforce_v_boundary_condition_local!(residual_f[:,ivperp,iz], vpa.bc,
+                    @views enforce_vpa_boundary_condition_local!(residual_f[:,ivperp,iz], vpa.bc,
                                                                vpa_advect[:,ivperp,iz,ir],
                                                                num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
                                                                vpa, vpa_spectral)
@@ -2067,7 +2067,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
             if vpa.n > 1
                 @begin_anyzv_z_vperp_region()
                 @loop_z_vperp iz ivperp begin
-                    @views enforce_v_boundary_condition_local!(residual[:,ivperp,iz], vpa.bc,
+                    @views enforce_vpa_boundary_condition_local!(residual[:,ivperp,iz], vpa.bc,
                                                                vpa_advect[:,ivperp,iz,ir],
                                                                num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
                                                                vpa, vpa_spectral)

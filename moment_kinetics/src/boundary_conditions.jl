@@ -918,7 +918,7 @@ enforce boundary conditions in vpa, z, and r on the evolved pdf
         @loop_s_r_z_vperp is ir iz ivperp begin
             # enforce the vpa BC
             # use that adv.speed independent of vpa
-            @views enforce_v_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa.bc,
+            @views enforce_vpa_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa.bc,
                              vpa_adv[:,ivperp,iz,ir,is], vpa_diffusion,
                              vpa, vpa_spectral)
         end
@@ -1508,7 +1508,7 @@ enforce boundary conditions on neutral particle distribution function
         @begin_sn_r_z_vr_vz_region()
         @loop_sn_r_z_vr_vz isn ir iz ivr ivz begin
             # enforce the vz BC
-            @views enforce_v_boundary_condition_local!(f_neutral[ivz,ivr,:,iz,ir,isn],
+            @views enforce_vpa_boundary_condition_local!(f_neutral[ivz,ivr,:,iz,ir,isn],
                                                        vzeta.bc,
                                                        vzeta_adv[ivz,ivr,:,iz,ir,isn],
                                                        false, vzeta, vzeta_spectral)
@@ -1518,7 +1518,7 @@ enforce boundary conditions on neutral particle distribution function
         @begin_sn_r_z_vzeta_vz_region()
         @loop_sn_r_z_vzeta_vz isn ir iz ivzeta ivz begin
             # enforce the vz BC
-            @views enforce_v_boundary_condition_local!(f_neutral[ivz,:,ivzeta,iz,ir,isn],
+            @views enforce_vpa_boundary_condition_local!(f_neutral[ivz,:,ivzeta,iz,ir,isn],
                                                        vr.bc,
                                                        vr_adv[ivz,:,ivzeta,iz,ir,isn],
                                                        false, vr, vr_spectral)
@@ -1528,7 +1528,7 @@ enforce boundary conditions on neutral particle distribution function
         @begin_sn_r_z_vzeta_vr_region()
         @loop_sn_r_z_vzeta_vr isn ir iz ivzeta ivr begin
             # enforce the vz BC
-            @views enforce_v_boundary_condition_local!(f_neutral[:,ivr,ivzeta,iz,ir,isn],
+            @views enforce_vpa_boundary_condition_local!(f_neutral[:,ivr,ivzeta,iz,ir,isn],
                                                        vz.bc,
                                                        vz_adv[:,ivr,ivzeta,iz,ir,isn],
                                                        vz_diffusion, vz, vz_spectral)
@@ -2682,7 +2682,7 @@ end
 
 """
 """
-function enforce_v_boundary_condition_local!(f, bc, speed, v_diffusion, v, v_spectral)
+function enforce_vpa_boundary_condition_local!(f, bc, speed, v_diffusion, v, v_spectral)
     if bc == "zero"
         if v_diffusion || speed[1] > 0.0
             # 'upwind' boundary

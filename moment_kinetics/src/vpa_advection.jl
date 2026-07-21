@@ -6,7 +6,7 @@ export vpa_advection!
 export update_speed_vpa!
 
 using ..advection: advance_f_local!
-using ..boundary_conditions: enforce_v_boundary_condition_local!
+using ..boundary_conditions: enforce_vpa_boundary_condition_local!
 using ..communication
 using ..debugging
 using ..looping
@@ -136,7 +136,7 @@ end
 
             function apply_bc!(x)
                 # Boundary condition
-                enforce_v_boundary_condition_local!(x, vpa_bc, speed, vpa_diffusion,
+                enforce_vpa_boundary_condition_local!(x, vpa_bc, speed, vpa_diffusion,
                                                     vpa, vpa_spectral)
 
                 if z.bc == "wall"
@@ -252,7 +252,7 @@ end
             #    end
 
             #    # Handle boundary conditions
-            #    enforce_v_boundary_condition_local!(vpa.scratch, vpa_bc, speed, vpa_diffusion,
+            #    enforce_vpa_boundary_condition_local!(vpa.scratch, vpa_bc, speed, vpa_diffusion,
             #                                        vpa, vpa_spectral)
 
             #    if z.bc == "wall"

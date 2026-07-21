@@ -9,7 +9,7 @@ using SparseArrays
 using ..looping
 using ..analysis: get_steady_state_global_maxabs_residual
 using ..derivatives: derivative_z_anyzv!, derivative_z_pdf_vpavperpz!
-using ..boundary_conditions: enforce_v_boundary_condition_local!,
+using ..boundary_conditions: enforce_vpa_boundary_condition_local!,
                              enforce_vperp_boundary_condition!,
                              get_ADI_boundary_v_solve_z_speed, vpagrid_to_vpa
 using ..calculus: derivative!, second_derivative!, integral,
@@ -2147,7 +2147,7 @@ function (res::kinetic_electron_residual!)(this_residual, new_variables; krylov=
     if vpa.n > 1
         @begin_anyzv_z_vperp_region()
         @loop_z_vperp iz ivperp begin
-            @views enforce_v_boundary_condition_local!(f_electron_residual[:,ivperp,iz], vpa.bc,
+            @views enforce_vpa_boundary_condition_local!(f_electron_residual[:,ivperp,iz], vpa.bc,
                                                        vpa_advect[:,ivperp,iz,ir],
                                                        num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
                                                        vpa, vpa_spectral)
@@ -3050,7 +3050,7 @@ end
         @loop_z_vperp iz ivperp begin
             # enforce the vpa BC
             # use that adv.speed independent of vpa
-            @views enforce_v_boundary_condition_local!(pdf[:,ivperp,iz], vpa.bc,
+            @views enforce_vpa_boundary_condition_local!(pdf[:,ivperp,iz], vpa.bc,
                                                        vpa_adv[:,ivperp,iz,ir],
                                                        vpa_diffusion, vpa, vpa_spectral)
         end
