@@ -548,6 +548,23 @@ function set_element_boundaries(nelement_global, L, element_spacing_option, coor
         # Rather than writing out all the necessary factors explicitly, just normalise the
         # element_boundaries array so that its first/last values are ±L/2.
         @. element_boundaries *= L / 2.0 / element_boundaries[end]
+    elseif startswith(element_spacing_option, "coarse_tail_vperp")
+        # Make vperp coarse tail on one end using the same arctan function as above to compress grid
+        # near vperp = 0
+        params = split(element_spacing_option, "coarse_tail_vperp")[2]
+        if params == ""
+            T = 5.0
+        else
+            T = parse(mk_float, params)
+        end
+        # This time "a" will run from 0 to 1 instead of -1 to 1 in order to only compress one end that
+        # is at the origin.
+        BT = atan(L / 2.0 / T)
+        a = (collect(1:nelement_global+1) .- 1) ./ (nelement_global)
+        @. element_boundaries = tan(BT * a) / (1.0 + (BT * a)^2 / 3.0)
+
+        # Need to rescale this back to -L/2 to L/2 because of vperp shifting function below
+        @. element_boundaries = element_boundaries * L / element_boundaries[end] - L/2.0
     elseif element_spacing_option == "uniform" || (element_spacing_option == "sqrt" && nelement_global < 4) # uniform spacing 
         for j in 1:nelement_global+1
             element_boundaries[j] = L*((j-1)/(nelement_global) - 0.5)
