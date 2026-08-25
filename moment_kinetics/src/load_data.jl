@@ -70,7 +70,8 @@ const em_variables = ("phi", "Er", "Ez", "vEr", "vEz")
 const ion_moment_variables = ("density", "parallel_flow", "pressure", "parallel_pressure",
                               "perpendicular_pressure", "thermal_speed", "temperature",
                               "parallel_temperature", "perpendicular_temperature",
-                              "parallel_heat_flux", "collision_frequency_ii", "sound_speed",
+                              "parallel_heat_flux", "collision_frequency_ii",
+                              "Krook_collision_frequency_ii", "sound_speed",
                               "mach_number", "total_energy", "total_energy_flux")
 const ion_moment_gradient_variables = ("ddens_dr", "ddens_dr_upwind", "ddens_dz",
                                        "ddens_dz_upwind", "dupar_dr", "dupar_dr_upwind",
