@@ -14,15 +14,15 @@ n_neutral_species = 0
 [ion_source_1]
 active = true
 z_profile = "gaussian"
-z_width = 4.0
-source_strength = 1.0
-source_T = 10.0
+z_width = 0.25
+source_strength = 5.0
+source_T = 3.0
 
 [reference_params]
 Bref = 1.0
-Lref = 50.0
+Lref = 20.0
 Nref = 1.0e19
-Tref = 10.0
+Tref = 100.0
 
 [z]
 ngrid = 5
@@ -37,12 +37,12 @@ bc = "wall"
 ngrid = 5
 discretization = "chebyshev_pseudospectral"
 nelement = 16
-L = 50.0
+L = 30.0
 element_spacing_option = "coarse_tails12.5"
 bc = "zero"
 
 [ion_species_1]
-initial_temperature = 3.3333333333333333333333
+initial_temperature = 0.33333333333333333333333
 initial_density = 1.0
 
 [z_IC_ion_species_1]
@@ -59,9 +59,11 @@ type = "Fekete4(3)"
 nstep = 1000000000
 dt = 1.0e-6
 minimum_dt = 1.0e-7
-#maximum_dt = 1.0e-4
-rtol = 1.0e-6
-atol = 1.0e-12
+maximum_dt = 1.0e-4
+max_increase_factor = 1.001
+rtol = 1.0e-8
+atol = 1.0e-13
+step_update_prefactor = 1.0e-1
 nwrite = 1000000
 nwrite_dfns = 1000000
 steady_state_residual = true
