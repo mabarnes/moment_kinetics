@@ -19,14 +19,14 @@ source_T = 1.0
 
 [reference_params]
 Bref = 1.0
-Lref = 50.0
+Lref = 20.0
 Nref = 1.0e19
-Tref = 10.0
+Tref = 100.0
 
 [z]
-ngrid = 5
+ngrid = 6
 discretization = "chebyshev_pseudospectral"
-nelement = 32
+nelement = 31
 #nelement_local = 2
 L = 1.0
 element_spacing_option = "sqrt"
@@ -41,7 +41,7 @@ element_spacing_option = "coarse_tails6.75"
 bc = "zero"
 
 [ion_species_1]
-initial_temperature = 3.3333333333333333333333
+initial_temperature = 0.33333333333333333333333
 initial_density = 1.0
 
 [z_IC_ion_species_1]
@@ -62,6 +62,7 @@ minimum_dt = 1.0e-7
 max_increase_factor = 1.001
 rtol = 1.0e-6
 atol = 1.0e-12
+step_update_prefactor = 0.1
 nwrite = 1000000
 nwrite_dfns = 1000000
 steady_state_residual = true
