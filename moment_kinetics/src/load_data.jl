@@ -3875,7 +3875,11 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
         it = run_info.itime_min:run_info.itime_skip:run_info.itime_max
     elseif isa(it, mk_int)
         nt = 1
-        it = collect(run_info.itime_min:run_info.itime_skip:run_info.itime_max)[it]
+        if it < 0
+            it = collect(run_info.itime_min:run_info.itime_skip:run_info.itime_max)[end+it+1]
+        else
+            it = collect(run_info.itime_min:run_info.itime_skip:run_info.itime_max)[it]
+        end
     else
         nt = length(it)
     end
