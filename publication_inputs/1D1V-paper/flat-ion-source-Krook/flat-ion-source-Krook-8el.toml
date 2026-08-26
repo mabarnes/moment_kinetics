@@ -14,8 +14,8 @@ n_neutral_species = 0
 [ion_source_1]
 active = true
 z_profile = "constant"
-source_strength = 1.0
-source_T = 1.0
+source_strength = 1.7724538509055159 # sqrt(pi)
+source_T = 3.0
 
 [reference_params]
 Bref = 1.0
