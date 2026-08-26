@@ -14,8 +14,8 @@ n_neutral_species = 0
 [ion_source_1]
 active = true
 z_profile = "gaussian"
-z_width = 0.25
-source_strength = 5.0
+z_width = 0.1
+source_strength = 10.0
 source_T = 3.0
 
 [reference_params]
