@@ -35,9 +35,9 @@ bc = "wall"
 [vpa]
 ngrid = 5
 discretization = "chebyshev_pseudospectral"
-nelement = 64
-L = 27.0
-element_spacing_option = "coarse_tails6.75"
+nelement = 128
+L = 60.0
+element_spacing_option = "coarse_tails8"
 bc = "zero"
 
 [ion_species_1]

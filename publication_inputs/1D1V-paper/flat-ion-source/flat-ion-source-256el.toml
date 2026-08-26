@@ -35,9 +35,9 @@ bc = "wall"
 [vpa]
 ngrid = 5
 discretization = "chebyshev_pseudospectral"
-nelement = 256
-L = 27.0
-element_spacing_option = "coarse_tails6.75"
+nelement = 512
+L = 60.0
+element_spacing_option = "coarse_tails8"
 bc = "zero"
 
 [ion_species_1]
@@ -61,7 +61,7 @@ minimum_dt = 1.0e-6
 #maximum_dt = 1.0e-4
 max_increase_factor = 1.001
 rtol = 1.0e-6
-atol = 1.0e-12
+atol = 1.0e-13
 step_update_prefactor = 0.1
 nwrite = 1000000
 nwrite_dfns = 1000000
