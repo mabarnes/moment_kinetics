@@ -5019,6 +5019,10 @@ const get_variable_funcs = Dict{String,Any}(
             if !run_info.evolve_p
                 throw(KeyError("evolve_p=false, so do not calculate electron_dp_dt"))
             end
+            if run_info.composition.electron_physics ∈ (boltzmann_electron_response,
+                                                        boltzmann_electron_response_with_simple_sheath)
+                throw(KeyError("Boltzmann electrons, so do not calculate electron_dp_dt"))
+            end
             # Try to load electron pressure to check that electrons are present in the output.
             _ = get_variable(run_info, "electron_pressure"; kwargs...)
 
