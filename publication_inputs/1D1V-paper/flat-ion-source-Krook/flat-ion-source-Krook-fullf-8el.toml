@@ -24,9 +24,9 @@ Nref = 1.0e19
 Tref = 100.0
 
 [z]
-ngrid = 5
+ngrid = 6
 discretization = "chebyshev_pseudospectral"
-nelement = 8
+nelement = 7
 #nelement_local = 2
 L = 1.0
 element_spacing_option = "sqrt"
