@@ -34,7 +34,7 @@ bc = "wall"
 
 [vpa]
 ngrid = 5
-discretization = "chebyshev_pseudospectral"
+discretization = "gausslegendre_pseudospectral"
 nelement = 512
 L = 60.0
 element_spacing_option = "coarse_tails8"
@@ -70,3 +70,4 @@ converged_residual_value = 1.0e-6
 
 [ion_numerical_dissipation]
 force_minimum_pdf_value = 0.0
+vpa_dissipation_coefficient = 1.0e-5
