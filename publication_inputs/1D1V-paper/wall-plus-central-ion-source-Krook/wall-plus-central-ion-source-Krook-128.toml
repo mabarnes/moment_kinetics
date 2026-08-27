@@ -44,7 +44,7 @@ bc = "wall"
 ngrid = 5
 discretization = "chebyshev_pseudospectral"
 nelement = 256
-L = 50.0
+L = 70.0
 element_spacing_option = "coarse_tails8"
 bc = "zero"
 
