@@ -70,4 +70,4 @@ converged_residual_value = 1.0e-6
 
 [ion_numerical_dissipation]
 force_minimum_pdf_value = 0.0
-vpa_dissipation_coefficient = 4.0e-5
+vpa_dissipation_coefficient = 4.0e-4
