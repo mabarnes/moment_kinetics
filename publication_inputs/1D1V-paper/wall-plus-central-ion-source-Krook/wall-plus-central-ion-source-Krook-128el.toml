@@ -34,7 +34,7 @@ Tref = 100.0
 [z]
 ngrid = 6
 discretization = "chebyshev_pseudospectral"
-nelement = 255
+nelement = 127
 #nelement_local = 2
 L = 1.0
 element_spacing_option = "sqrt"
@@ -43,7 +43,7 @@ bc = "wall"
 [vpa]
 ngrid = 5
 discretization = "chebyshev_pseudospectral"
-nelement = 512
+nelement = 256
 L = 70.0
 element_spacing_option = "coarse_tails8"
 bc = "zero"
@@ -69,7 +69,7 @@ minimum_dt = 1.0e-6
 #maximum_dt = 1.0e-4
 max_increase_factor = 1.001
 rtol = 1.0e-5
-atol = 1.0e-12
+atol = 1.0e-13
 step_update_prefactor = 0.1
 nwrite = 1000000
 nwrite_dfns = 1000000
