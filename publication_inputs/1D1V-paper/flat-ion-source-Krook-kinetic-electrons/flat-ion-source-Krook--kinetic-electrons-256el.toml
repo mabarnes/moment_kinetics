@@ -89,7 +89,7 @@ include_wall_bc_in_preconditioner = true
 
 [nonlinear_solver]
 nonlinear_max_iterations = 100
-rtol = 1.0e-6
+rtol = 1.0e-7
 atol = 1.0e-14
 linear_restart = 5
 preconditioner_update_interval = 25
