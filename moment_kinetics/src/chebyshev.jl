@@ -20,9 +20,11 @@ import ..calculus: elementwise_derivative!
 import ..calculus: elementwise_indefinite_integration!
 using ..communication
 using ..debugging
-import ..interpolation: single_element_interpolate!
+import ..interpolation: single_element_interpolate!,
+                        fill_single_element_interpolation_matrix!
 using ..moment_kinetics_structs: discretization_info
 using ..gauss_legendre: integration_matrix!
+using ..lagrange_polynomials: lagrange_poly_optimised
 """
 Chebyshev pseudospectral discretization
 """
@@ -580,6 +582,22 @@ function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, c
             nplus1 += 1.0
             U_nminus1, U_n = U_n, 2.0 * z * U_n - U_nminus1
             result[i] += coef * nplus1 * U_n * scale
+        end
+    end
+
+    return nothing
+end
+
+function fill_single_element_interpolation_matrix!(
+             matrix_slice, newgrid, jelement, coord,
+             chebyshev::chebyshev_base_info)
+    n_new = length(newgrid)
+
+    for j ∈ 1:coord.ngrid
+        other_nodes = @view coord.other_nodes[:,j,jelement]
+        one_over_denominator = coord.one_over_denominator[j,jelement]
+        for i ∈ 1:n_new
+            matrix_slice[i,j] = lagrange_poly_optimised(other_nodes, one_over_denominator, newgrid[i])
         end
     end
 
