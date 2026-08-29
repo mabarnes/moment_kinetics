@@ -848,7 +848,7 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments,
 
             reset_nonlinear_per_stage_counters!(nl_solver_params)
 
-            residual_norm = -1.0
+            residual = -1.0
             if step_success
                 # Calculate residuals to decide if iteration is converged.
                 # Might want an option to calculate the residual only after a certain number
@@ -884,9 +884,9 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments,
                 @begin_anyzv_region()
                 @anyzv_serial_region begin
                     if z.irank == 0 && z.irank == z.nrank - 1
-                        println("ir: $ir, iteration: ", step_counter[] - initial_step_counter, " time: ", t[], " dt_electron: ", dt[], " phi_boundary: ", this_phi[[1,end]], " residual_norm: ", residual_norm)
+                        println("ir: $ir, iteration: ", step_counter[] - initial_step_counter, " time: ", t[], " dt_electron: ", dt[], " phi_boundary: ", this_phi[[1,end]], " residual: ", residual)
                     elseif z.irank == 0
-                        println("ir: $ir, iteration: ", step_counter[] - initial_step_counter, " time: ", t[], " dt_electron: ", dt[], " phi_boundary_lower: ", this_phi[1], " residual_norm: ", residual_norm)
+                        println("ir: $ir, iteration: ", step_counter[] - initial_step_counter, " time: ", t[], " dt_electron: ", dt[], " phi_boundary_lower: ", this_phi[1], " residual: ", residual)
                     end
                 end
             end
